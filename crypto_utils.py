@@ -94,6 +94,61 @@ def decrypt_text_chacha(encoded_data: str, password: str) -> str:
         raise ValueError("Dekripsi gagal: password salah atau data telah diubah.")
 
 
+def encrypt_file(input_path: str, output_path: str, password: str, algorithm: str = "aes"):
+    """
+    Enkripsi sebuah file (gambar, PDF, dll).
+    algorithm: "aes" atau "chacha"
+    Hasil disimpan sebagai file biner (bukan Base64) di output_path.
+    """
+    with open(input_path, "rb") as f:
+        data = f.read()
+
+    key, salt = derive_key(password)
+    nonce = os.urandom(12)
+
+    if algorithm == "aes":
+        cipher = AESGCM(key)
+    elif algorithm == "chacha":
+        cipher = ChaCha20Poly1305(key)
+    else:
+        raise ValueError("algorithm harus 'aes' atau 'chacha'")
+
+    ciphertext = cipher.encrypt(nonce, data, None)
+    combined = salt + nonce + ciphertext
+
+    with open(output_path, "wb") as f:
+        f.write(combined)
+
+
+def decrypt_file(input_path: str, output_path: str, password: str, algorithm: str = "aes"):
+    """
+    Dekripsi file hasil encrypt_file(). Menolak jika password salah/file diubah.
+    """
+    with open(input_path, "rb") as f:
+        combined = f.read()
+
+    salt = combined[:16]
+    nonce = combined[16:28]
+    ciphertext = combined[28:]
+
+    key, _ = derive_key(password, salt)
+
+    if algorithm == "aes":
+        cipher = AESGCM(key)
+    elif algorithm == "chacha":
+        cipher = ChaCha20Poly1305(key)
+    else:
+        raise ValueError("algorithm harus 'aes' atau 'chacha'")
+
+    try:
+        plaintext = cipher.decrypt(nonce, ciphertext, None)
+    except InvalidTag:
+        raise ValueError("Dekripsi gagal: password salah atau file telah diubah.")
+
+    with open(output_path, "wb") as f:
+        f.write(plaintext)
+
+
 # --- Tes cepat ---
 if __name__ == "__main__":
     password = "passwordku123"
@@ -121,3 +176,17 @@ if __name__ == "__main__":
     hasil_dekripsi_chacha = decrypt_text_chacha(hasil_enkripsi_chacha, password)
     print("Hasil dekripsi     :", hasil_dekripsi_chacha)
     print("Sesuai pesan asli? :", hasil_dekripsi_chacha == pesan_asli)
+
+    print("\n=== TES 4: Enkripsi & Dekripsi FILE ===")
+    with open("contoh.txt", "w") as f:
+        f.write("Ini isi file contoh yang akan dienkripsi.")
+
+    encrypt_file("contoh.txt", "contoh.enc", password)
+    print("File berhasil dienkripsi -> contoh.enc")
+
+    decrypt_file("contoh.enc", "contoh_hasil.txt", password)
+    print("File berhasil didekripsi -> contoh_hasil.txt")
+
+    with open("contoh.txt", "rb") as f1, open("contoh_hasil.txt", "rb") as f2:
+        sama = f1.read() == f2.read()
+    print("Isi file sama dengan aslinya?", sama)
