@@ -40,3 +40,51 @@ Pilih tab Dekripsi, tempel ciphertext Base64 yang ingin didekripsi, masukkan pas
 
 ### Enkripsi/Dekripsi File
 Pilih menu Enkripsi/Dekripsi File. Untuk enkripsi, upload file seperti gambar atau PDF, masukkan password, klik enkripsi, lalu unduh file hasil berekstensi .enc. Untuk dekripsi, upload file .enc tersebut, masukkan password yang sama, klik dekripsi, lalu unduh file hasil yang sudah kembali ke bentuk aslinya.
+
+## Fitur Pengayaan
+
+### 1. Hybrid Encryption (RSA-OAEP + AES-256-GCM)
+Modul `hybrid_crypto.py` menyediakan enkripsi hybrid: session key AES-256 dibangkitkan acak, dipakai untuk mengenkripsi data dengan AES-256-GCM, lalu session key tersebut dibungkus dengan RSA-OAEP (padding MGF1-SHA256) memakai public key penerima. Modul ini dipakai lewat kode Python langsung (belum terhubung ke antarmuka Streamlit), fungsi utamanya: `generate_rsa_keypair()`, `encrypt_hybrid()`, dan `decrypt_hybrid()`.
+
+### 2. REST API dengan Autentikasi JWT (HMAC-SHA512)
+Modul `api.py` menyediakan REST API berbasis Flask dengan endpoint `/login`, `/encrypt`, dan `/decrypt`. Endpoint `/encrypt` dan `/decrypt` wajib menyertakan token JWT (didapat dari `/login`) di header `Authorization: Bearer <token>`.
+
+Sebelum menjalankan `api.py`, dua environment variable berikut **wajib** diset lebih dulu (aplikasi akan menolak berjalan jika belum diset, demi keamanan — tidak ada kunci atau kredensial yang ditulis di kode sumber):
+
+- `JWT_SECRET_KEY` — kunci rahasia untuk menandatangani token JWT, disarankan minimal 64 byte acak
+- `APP_USERS` — daftar pengguna yang diizinkan login, format `username1:password1,username2:password2`
+
+**Windows (Command Prompt):**
+```
+set JWT_SECRET_KEY=isi_dengan_kunci_acak_minimal_64_karakter
+set APP_USERS=bunga:passwordBunga,agnia:passwordAgnia,serli:passwordSerli
+python api.py
+```
+
+**Mac/Linux:**
+```
+export JWT_SECRET_KEY=isi_dengan_kunci_acak_minimal_64_karakter
+export APP_USERS=bunga:passwordBunga,agnia:passwordAgnia,serli:passwordSerli
+python api.py
+```
+
+Server akan berjalan di `http://127.0.0.1:5000`.
+
+**Contoh penggunaan lewat curl:**
+
+1. Login untuk mendapatkan token:
+```
+curl -X POST http://127.0.0.1:5000/login -H "Content-Type: application/json" -d "{\"username\":\"bunga\",\"password\":\"passwordBunga\"}"
+```
+
+2. Enkripsi teks (ganti `TOKEN` dengan token dari langkah 1):
+```
+curl -X POST http://127.0.0.1:5000/encrypt -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d "{\"plaintext\":\"pesan rahasia\",\"password\":\"pass123\"}"
+```
+
+3. Dekripsi teks (ganti `CIPHERTEXT` dengan hasil dari langkah 2):
+```
+curl -X POST http://127.0.0.1:5000/decrypt -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d "{\"ciphertext\":\"CIPHERTEXT\",\"password\":\"pass123\"}"
+```
+
+Catatan: `hybrid_crypto.py` dan `api.py` berjalan sebagai modul/server terpisah dari antarmuka Streamlit (`app.py`), sesuai desain arsitektur yang memisahkan fitur inti (UI interaktif) dari fitur pengayaan (modul mandiri dan layanan API).
