@@ -6,53 +6,29 @@ from cryptography.exceptions import InvalidTag
 
 
 def derive_key(password: str, salt: bytes = None) -> tuple[bytes, bytes]:
-    """
-    Menurunkan kunci 256-bit dari password menggunakan scrypt.
-    """
     if salt is None:
         salt = os.urandom(16)
-
-    kdf = Scrypt(
-        salt=salt,
-        length=32,
-        n=2**14,
-        r=8,
-        p=1,
-    )
+    kdf = Scrypt(salt=salt, length=32, n=2**14, r=8, p=1)
     key = kdf.derive(password.encode())
     return key, salt
 
 
 def encrypt_text(plaintext: str, password: str) -> str:
-    """
-    Enkripsi teks memakai AES-256-GCM.
-    Kunci diturunkan dari password. Salt dan nonce dibangkitkan acak.
-    Hasil dikemas jadi satu string Base64: salt + nonce + ciphertext(+tag)
-    """
     key, salt = derive_key(password)
-    nonce = os.urandom(12)  # nonce 12 byte, standar untuk GCM
-
+    nonce = os.urandom(12)
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(nonce, plaintext.encode(), None)
-
     combined = salt + nonce + ciphertext
     return base64.b64encode(combined).decode()
 
 
 def decrypt_text(encoded_data: str, password: str) -> str:
-    """
-    Dekripsi teks hasil dari encrypt_text().
-    Akan melempar error jika password salah atau data sudah diubah.
-    """
     combined = base64.b64decode(encoded_data)
-
     salt = combined[:16]
     nonce = combined[16:28]
     ciphertext = combined[28:]
-
     key, _ = derive_key(password, salt)
     aesgcm = AESGCM(key)
-
     try:
         plaintext = aesgcm.decrypt(nonce, ciphertext, None)
         return plaintext.decode()
@@ -61,32 +37,21 @@ def decrypt_text(encoded_data: str, password: str) -> str:
 
 
 def encrypt_text_chacha(plaintext: str, password: str) -> str:
-    """
-    Enkripsi teks memakai ChaCha20-Poly1305 (pembanding AES-GCM).
-    """
     key, salt = derive_key(password)
     nonce = os.urandom(12)
-
     chacha = ChaCha20Poly1305(key)
     ciphertext = chacha.encrypt(nonce, plaintext.encode(), None)
-
     combined = salt + nonce + ciphertext
     return base64.b64encode(combined).decode()
 
 
 def decrypt_text_chacha(encoded_data: str, password: str) -> str:
-    """
-    Dekripsi teks hasil dari encrypt_text_chacha().
-    """
     combined = base64.b64decode(encoded_data)
-
     salt = combined[:16]
     nonce = combined[16:28]
     ciphertext = combined[28:]
-
     key, _ = derive_key(password, salt)
     chacha = ChaCha20Poly1305(key)
-
     try:
         plaintext = chacha.decrypt(nonce, ciphertext, None)
         return plaintext.decode()
@@ -95,98 +60,38 @@ def decrypt_text_chacha(encoded_data: str, password: str) -> str:
 
 
 def encrypt_file(input_path: str, output_path: str, password: str, algorithm: str = "aes"):
-    """
-    Enkripsi sebuah file (gambar, PDF, dll).
-    algorithm: "aes" atau "chacha"
-    Hasil disimpan sebagai file biner (bukan Base64) di output_path.
-    """
     with open(input_path, "rb") as f:
         data = f.read()
-
     key, salt = derive_key(password)
     nonce = os.urandom(12)
-
     if algorithm == "aes":
         cipher = AESGCM(key)
     elif algorithm == "chacha":
         cipher = ChaCha20Poly1305(key)
     else:
         raise ValueError("algorithm harus 'aes' atau 'chacha'")
-
     ciphertext = cipher.encrypt(nonce, data, None)
     combined = salt + nonce + ciphertext
-
     with open(output_path, "wb") as f:
         f.write(combined)
 
 
 def decrypt_file(input_path: str, output_path: str, password: str, algorithm: str = "aes"):
-    """
-    Dekripsi file hasil encrypt_file(). Menolak jika password salah/file diubah.
-    """
     with open(input_path, "rb") as f:
         combined = f.read()
-
     salt = combined[:16]
     nonce = combined[16:28]
     ciphertext = combined[28:]
-
     key, _ = derive_key(password, salt)
-
     if algorithm == "aes":
         cipher = AESGCM(key)
     elif algorithm == "chacha":
         cipher = ChaCha20Poly1305(key)
     else:
         raise ValueError("algorithm harus 'aes' atau 'chacha'")
-
     try:
         plaintext = cipher.decrypt(nonce, ciphertext, None)
     except InvalidTag:
         raise ValueError("Dekripsi gagal: password salah atau file telah diubah.")
-
     with open(output_path, "wb") as f:
         f.write(plaintext)
-
-
-# --- Tes cepat ---
-if __name__ == "__main__":
-    password = "passwordku123"
-    pesan_asli = "Ini pesan rahasia yang harus dienkripsi."
-
-    print("=== TES 1: Enkripsi & Dekripsi normal (AES-256-GCM) ===")
-    hasil_enkripsi = encrypt_text(pesan_asli, password)
-    print("Ciphertext (Base64):", hasil_enkripsi)
-
-    hasil_dekripsi = decrypt_text(hasil_enkripsi, password)
-    print("Hasil dekripsi     :", hasil_dekripsi)
-    print("Sesuai pesan asli? :", hasil_dekripsi == pesan_asli)
-
-    print("\n=== TES 2: Dekripsi dengan password SALAH ===")
-    try:
-        decrypt_text(hasil_enkripsi, "password_salah")
-        print("BAHAYA: seharusnya gagal tapi malah berhasil!")
-    except ValueError as e:
-        print("Berhasil ditolak, pesan error:", e)
-
-    print("\n=== TES 3: Enkripsi & Dekripsi pakai ChaCha20-Poly1305 ===")
-    hasil_enkripsi_chacha = encrypt_text_chacha(pesan_asli, password)
-    print("Ciphertext (Base64):", hasil_enkripsi_chacha)
-
-    hasil_dekripsi_chacha = decrypt_text_chacha(hasil_enkripsi_chacha, password)
-    print("Hasil dekripsi     :", hasil_dekripsi_chacha)
-    print("Sesuai pesan asli? :", hasil_dekripsi_chacha == pesan_asli)
-
-    print("\n=== TES 4: Enkripsi & Dekripsi FILE ===")
-    with open("contoh.txt", "w") as f:
-        f.write("Ini isi file contoh yang akan dienkripsi.")
-
-    encrypt_file("contoh.txt", "contoh.enc", password)
-    print("File berhasil dienkripsi -> contoh.enc")
-
-    decrypt_file("contoh.enc", "contoh_hasil.txt", password)
-    print("File berhasil didekripsi -> contoh_hasil.txt")
-
-    with open("contoh.txt", "rb") as f1, open("contoh_hasil.txt", "rb") as f2:
-        sama = f1.read() == f2.read()
-    print("Isi file sama dengan aslinya?", sama)
