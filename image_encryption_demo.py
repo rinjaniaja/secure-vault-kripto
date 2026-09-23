@@ -204,7 +204,11 @@ def buat_gambar_perbandingan(citra_list: list[Image.Image], judul_list: list[str
 # MAIN
 # =============================================================================
 def main():
-    password = "PasswordDemoECBvsGCM123!"  # nilai contoh HANYA untuk demo lokal ini
+    password = os.environ.get("DEMO_PASSWORD")
+    if not password:
+        print("ERROR: Environment variable DEMO_PASSWORD belum diset.")
+        print("Contoh (Windows CMD): set DEMO_PASSWORD=passwordAcakKalianSendiri123")
+        return
 
     print("=" * 70)
     print("DEMO: VISUALISASI KELEMAHAN MODE ECB vs MODE AMAN (AES-256-GCM)")
