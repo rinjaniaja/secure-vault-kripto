@@ -4,6 +4,7 @@ Fitur pengayaan: REST API untuk enkripsi/dekripsi, diamankan JWT HMAC-SHA512
 """
 
 import os
+import hmac
 import jwt
 import datetime
 from flask import Flask, request, jsonify
@@ -11,13 +12,39 @@ from crypto_utils import encrypt_text, decrypt_text
 
 app = Flask(__name__)
 
-# SECRET_KEY diambil dari environment variable JWT_SECRET_KEY.
-# Kalau variable itu belum diset di sistem, dipakai nilai default di bawah
-# (64 byte / 128 karakter hex, memenuhi rekomendasi minimum untuk HS512).
-SECRET_KEY = os.environ.get(
-    "JWT_SECRET_KEY",
-    "34275462a36d64fa9153b75f217fb287d2bcaa16a444805a907ccb3c0dbe1c778e2e24edf132529cdbf33e7b4d3af29c948a46e18f166e423af44b58c83b6007",
-)
+# SECRET_KEY WAJIB diset lewat environment variable JWT_SECRET_KEY.
+# Tidak ada nilai default di kode sumber (sesuai ketentuan tugas: kunci
+# tidak boleh ditulis langsung di kode sumber maupun diunggah ke GitHub).
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY belum diset sebagai environment variable.\n"
+        "Windows CMD  : set JWT_SECRET_KEY=<kunci_acak_minimal_64_byte>\n"
+        "PowerShell   : $env:JWT_SECRET_KEY=\"<kunci_acak_minimal_64_byte>\""
+    )
+
+# Daftar pengguna diambil dari environment variable APP_USERS,
+# format: "username1:password1,username2:password2"
+# WAJIB diset, tidak ada kredensial tertanam di kode sumber.
+_raw_users = os.environ.get("APP_USERS", "")
+if not _raw_users:
+    raise RuntimeError(
+        "APP_USERS belum diset sebagai environment variable.\n"
+        'Contoh (Windows CMD): set APP_USERS=agnia:passwordAgnia123,bunga:passwordBunga456'
+    )
+
+USERS = {}
+for _pair in _raw_users.split(","):
+    if ":" in _pair:
+        _uname, _pwd = _pair.split(":", 1)
+        USERS[_uname.strip()] = _pwd.strip()
+
+
+def verify_credentials(username, password):
+    """Cek username & password. Pakai compare_digest agar tahan timing attack."""
+    if username not in USERS:
+        return False
+    return hmac.compare_digest(USERS[username], password)
 
 
 def generate_token(username):
@@ -55,8 +82,11 @@ def require_auth(f):
 def login():
     data = request.json
     username = data.get("username")
-    if not username:
-        return jsonify({"error": "username wajib diisi"}), 400
+    password = data.get("password")
+    if not username or not password:
+        return jsonify({"error": "username dan password wajib diisi"}), 400
+    if not verify_credentials(username, password):
+        return jsonify({"error": "username atau password salah"}), 401
     token = generate_token(username)
     return jsonify({"token": token})
 

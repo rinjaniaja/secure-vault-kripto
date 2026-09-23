@@ -25,15 +25,28 @@ def test_encrypt_with_invalid_token_rejected(client):
 
 
 def test_login_returns_token(client):
-    """Login harus mengembalikan token JWT."""
-    response = client.post("/login", json={"username": "agnia"})
+    """Login dengan username & password benar harus mengembalikan token JWT."""
+    response = client.post("/login", json={"username": "agnia", "password": "testpassword123"})
     assert response.status_code == 200
     assert "token" in response.json
 
 
+def test_login_wrong_password_rejected(client):
+    """Login dengan password salah harus ditolak (401), TIDAK boleh keluar token."""
+    response = client.post("/login", json={"username": "agnia", "password": "password_salah"})
+    assert response.status_code == 401
+    assert "token" not in response.json
+
+
+def test_login_unknown_username_rejected(client):
+    """Login dengan username yang tidak terdaftar harus ditolak (401)."""
+    response = client.post("/login", json={"username": "orang_asing", "password": "apasaja"})
+    assert response.status_code == 401
+
+
 def test_encrypt_decrypt_roundtrip_with_valid_token(client):
     """Dengan token valid, enkripsi lalu dekripsi harus balik ke plaintext asli."""
-    login_response = client.post("/login", json={"username": "agnia"})
+    login_response = client.post("/login", json={"username": "agnia", "password": "testpassword123"})
     token = login_response.json["token"]
     headers = {"Authorization": f"Bearer {token}"}
 
