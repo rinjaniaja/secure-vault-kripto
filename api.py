@@ -10,13 +10,20 @@ from flask import Flask, request, jsonify
 from crypto_utils import encrypt_text, decrypt_text
 
 app = Flask(__name__)
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "ganti-ini-lewat-environment-variable")
+
+# SECRET_KEY diambil dari environment variable JWT_SECRET_KEY.
+# Kalau variable itu belum diset di sistem, dipakai nilai default di bawah
+# (64 byte / 128 karakter hex, memenuhi rekomendasi minimum untuk HS512).
+SECRET_KEY = os.environ.get(
+    "JWT_SECRET_KEY",
+    "34275462a36d64fa9153b75f217fb287d2bcaa16a444805a907ccb3c0dbe1c778e2e24edf132529cdbf33e7b4d3af29c948a46e18f166e423af44b58c83b6007",
+)
 
 
 def generate_token(username):
     payload = {
         "username": username,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+        "exp": datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS512")
 
