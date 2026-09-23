@@ -23,6 +23,48 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 # =========================================================
+# HELPER: file GAMBAR dan PDF yang BENAR-BENAR VALID
+# (dipakai di uji_kebenaran_dekripsi, menggantikan random bytes
+# berlabel header palsu yang dipakai sebelumnya)
+# =========================================================
+def _buat_png_valid() -> bytes:
+    """PNG kecil (32x32) yang valid, dibuat memakai Pillow."""
+    from PIL import Image
+    import io as _io
+
+    img = Image.new("RGB", (32, 32), color=(80, 120, 200))
+    buf = _io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _buat_pdf_valid() -> bytes:
+    """PDF satu halaman kosong yang valid secara struktur (tanpa dependency
+    tambahan seperti reportlab), bisa dibuka pembaca PDF standar."""
+    return b"""%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>
+endobj
+xref
+0 4
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+190
+%%EOF"""
+
+
+# =========================================================
 # 1. KEBENARAN DEKRIPSI - 10 INPUT BERBEDA
 # =========================================================
 def uji_kebenaran_dekripsi():
@@ -48,10 +90,13 @@ def uji_kebenaran_dekripsi():
         benar = (dec == teks)
         hasil.append({"No": i, "Jenis Input": f"Teks #{i}", "Ukuran (byte)": len(teks.encode()), "Berhasil": benar})
 
-    # Input file biner (simulasi gambar & PDF dengan byte acak header khas)
+    # Input file biner: GAMBAR dan PDF yang BENAR-BENAR VALID (bukan sekadar
+    # byte acak berlabel header palsu), sesuai syarat eksplisit dosen bahwa
+    # dari 10 test case kebenaran dekripsi harus ada minimal 1 file gambar
+    # dan 1 file PDF yang diuji.
     file_tests = [
-        ("simulasi_gambar.png", b"\x89PNG\r\n\x1a\n" + os.urandom(2000)),
-        ("simulasi_dokumen.pdf", b"%PDF-1.4\n" + os.urandom(3000)),
+        ("gambar_uji.png", _buat_png_valid()),
+        ("dokumen_uji.pdf", _buat_pdf_valid()),
     ]
     for i, (nama, data) in enumerate(file_tests, 9):
         in_path = os.path.join(OUTPUT_DIR, nama)
