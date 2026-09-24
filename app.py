@@ -3,7 +3,7 @@
 APLIKASI WEB ENKRIPSI & DEKRIPSI MODERN (TOPIK A: ENKRIPSI ALGORITMA MODERN)
 Tugas UTS Keamanan Informasi
 Framework: Python + Streamlit (Adaptive Theme & Responsive Mobile/Desktop UI)
-Backend: crypto_utils.py (AES-256-GCM & ChaCha20-Poly1305 dengan Scrypt KDF)
+Backend: crypto_utils.py, hybrid_crypto.py, image_encryption_demo.py
 =============================================================================
 """
 
@@ -12,6 +12,8 @@ import time
 import os
 import tempfile
 import base64
+from PIL import Image
+import io
 
 # Import fungsi backend dari crypto_utils.py (logika tidak diubah sama sekali)
 from crypto_utils import (
@@ -21,6 +23,15 @@ from crypto_utils import (
     decrypt_text_chacha,
     encrypt_file,
     decrypt_file
+)
+
+# Import fungsi fitur pengayaan
+from hybrid_crypto import generate_rsa_keypair, encrypt_hybrid, decrypt_hybrid
+from image_encryption_demo import (
+    buat_citra_demo,
+    enkripsi_ecb,
+    enkripsi_gcm,
+    bytes_ke_citra
 )
 
 # -----------------------------------------------------------------------------
@@ -514,15 +525,15 @@ inject_custom_css()
 # -----------------------------------------------------------------------------
 st.markdown("""
 <div class="hero-container">
-    <div class="hero-badge-pill">🛡️ Tugas UTS Keamanan Informasi — Topik A</div>
+    <div class="hero-badge-pill">🛡️ Tugas Proyek Aplikasi Kriptografi — Topik A</div>
     <div class="hero-title">CipherVault Studio Pro</div>
-    <div class="hero-subtitle">Platform Enkripsi & Dekripsi Modern AEAD (AES-256-GCM & ChaCha20-Poly1305)</div>
+    <div class="hero-subtitle">Platform Enkripsi & Dekripsi Modern AEAD, Hybrid Encryption (RSA + AES), & Visualisasi Keamanan</div>
     <div class="hero-tags">
-        <span class="tag-item">🔑 Scrypt Key Derivation</span>
+        <span class="tag-item">🔑 Scrypt KDF</span>
         <span class="tag-item">⚡ AES-256-GCM</span>
         <span class="tag-item">🚀 ChaCha20-Poly1305</span>
-        <span class="tag-item">🎲 12-Byte Nonce</span>
-        <span class="tag-item">🔒 Zero Storage Leak</span>
+        <span class="tag-item">🔐 RSA-2048 OAEP</span>
+        <span class="tag-item">🖼️ ECB vs GCM Demo</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -538,16 +549,18 @@ with st.sidebar:
         [
             "🔐 Enkripsi / Dekripsi Teks",
             "📁 Enkripsi / Dekripsi File",
+            "🔑 Hybrid Encryption (RSA-OAEP + AES)",
+            "🖼️ Demo Keamanan: ECB vs Mode Aman",
             "ℹ️ Tentang & Dokumentasi"
         ],
         index=0
     )
     
     st.divider()
-    st.markdown("### ⚡ Pengaturan Algoritma")
+    st.markdown("### ⚡ Pengaturan Algoritma Utama")
     
     selected_algo = st.selectbox(
-        "Pilih Algoritma Kriptografi:",
+        "Pilih Algoritma Simetris Utama:",
         ["AES-256-GCM", "ChaCha20-Poly1305"],
         help="AES-256-GCM (Block Cipher AEAD) atau ChaCha20-Poly1305 (Stream Cipher AEAD)."
     )
@@ -556,7 +569,7 @@ with st.sidebar:
     algo_code = "AES-256-GCM" if selected_algo == "AES-256-GCM" else "ChaCha20-Poly1305"
     st.markdown(f"""
     <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-        <span class="pill-badge">🟢 {selected_menu.split()[1]}</span>
+        <span class="pill-badge">🟢 {selected_menu.split()[1] if len(selected_menu.split()) > 1 else selected_menu}</span>
         <span class="pill-badge pill-badge-cyan">⚡ {algo_code}</span>
     </div>
     """, unsafe_allow_html=True)
@@ -570,7 +583,7 @@ with st.sidebar:
         <div class="member-item-pro">🔑 <span>Topik A: Enkripsi Modern</span></div>
         <div class="member-item-pro">🧪 <span>KDF: Scrypt (N=16384, r=8, p=1)</span></div>
         <div class="member-item-pro">🛡️ <span>Cipher: AES-GCM & ChaCha20</span></div>
-        <div class="member-item-pro">📦 <span>Format: Salt+Nonce+Cipher+Tag</span></div>
+        <div class="member-item-pro">🔐 <span>Asimetris: RSA-OAEP 2048</span></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -610,7 +623,7 @@ def render_technical_panel(algo_name, process_time_ms, input_size_bytes, output_
             </div>
             <div class="tech-row-pro">
                 <span class="tech-label-pro">📦 Overhead Header Binary:</span>
-                <span class="tech-val-pro">{overhead_str} (Salt 16B + Nonce 12B + Tag 16B)</span>
+                <span class="tech-val-pro">{overhead_str}</span>
             </div>
             
             <div style="margin-top:15px; font-weight:700;">Visualisasi Layout Structure Header Data Binary:</div>
@@ -934,7 +947,212 @@ elif selected_menu == "📁 Enkripsi / Dekripsi File":
                     st.error("🛑 Dekripsi file gagal: Password salah, file corrupt, atau data telah diubah!")
 
 # -----------------------------------------------------------------------------
-# 8. MODUL 3: TENTANG APLIKASI & DOKUMENTASI KRIPTOGRAFI
+# 8. MODUL 3 (PENGAYAAN): HYBRID ENCRYPTION (RSA-OAEP + AES)
+# -----------------------------------------------------------------------------
+elif selected_menu == "🔑 Hybrid Encryption (RSA-OAEP + AES)":
+    st.subheader("🔑 Hybrid Encryption System (RSA-OAEP 2048 + AES-256-GCM)")
+    st.caption("Kombinasi Enkripsi Asimetris (RSA-OAEP) untuk enkripsi Session Key simetris dan Enkripsi Simetris (AES-256-GCM) untuk pengiriman data berkecepatan tinggi.")
+
+    # Manajemen Session State Pasangan Kunci RSA
+    if "rsa_private_key" not in st.session_state or "rsa_public_key" not in st.session_state:
+        priv_k, pub_k = generate_rsa_keypair(2048)
+        st.session_state["rsa_private_key"] = priv_k
+        st.session_state["rsa_public_key"] = pub_k
+
+    col_rsa_info, col_rsa_btn = st.columns([3, 1])
+    with col_rsa_info:
+        st.info("🔐 **Status Pasangan Kunci RSA Aktif:** Keypair RSA 2048-bit sudah siap di Memori Session State.", icon="ℹ️")
+    with col_rsa_btn:
+        if st.button("🔄 Generate RSA Keypair Baru"):
+            priv_k, pub_k = generate_rsa_keypair(2048)
+            st.session_state["rsa_private_key"] = priv_k
+            st.session_state["rsa_public_key"] = pub_k
+            st.success("✅ Kunci RSA 2048-bit baru berhasil digenerate!")
+
+    tab_hybrid_enc, tab_hybrid_dec = st.tabs(["🔒 Enkripsi Hybrid", "🔓 Dekripsi Hybrid"])
+
+    # --- TAB ENKRIPSI HYBRID ---
+    with tab_hybrid_enc:
+        plaintext_hybrid = st.text_area(
+            "Teks Asli (Plaintext):",
+            height=140,
+            placeholder="Ketik pesan rahasia yang akan dienkripsi dengan Hybrid Scheme...",
+            key="plaintext_hybrid"
+        )
+
+        if st.button("🚀 Enkripsi Hybrid Now", key="btn_hybrid_enc"):
+            if not plaintext_hybrid.strip():
+                st.warning("⚠️ Harap masukkan teks asli yang ingin dienkripsi!")
+            else:
+                try:
+                    start_t = time.perf_counter()
+                    res = encrypt_hybrid(plaintext_hybrid.encode("utf-8"), st.session_state["rsa_public_key"])
+                    end_t = time.perf_counter()
+                    proc_ms = (end_t - start_t) * 1000
+
+                    ct_b64 = base64.b64encode(res["ciphertext"]).decode("utf-8")
+                    nonce_b64 = base64.b64encode(res["nonce"]).decode("utf-8")
+                    enc_key_b64 = base64.b64encode(res["encrypted_session_key"]).decode("utf-8")
+
+                    st.success("✅ Enkripsi Hybrid Berhasil!")
+                    
+                    st.markdown("**1. Encrypted Session Key (RSA-OAEP Encrypted AES Key - Base64):**")
+                    st.code(enc_key_b64, language="text")
+
+                    st.markdown("**2. Nonce (12-Byte IV - Base64):**")
+                    st.code(nonce_b64, language="text")
+
+                    st.markdown("**3. Ciphertext Data (AES-256-GCM Encrypted - Base64):**")
+                    st.code(ct_b64, language="text")
+
+                    st.markdown("""
+                    <div class="tech-panel-pro">
+                        <div class="tech-row-pro">
+                            <span class="tech-label-pro">🔑 Skema Enkripsi:</span>
+                            <span class="tech-val-pro">Hybrid (RSA-OAEP 2048 + AES-256-GCM)</span>
+                        </div>
+                        <div class="tech-row-pro">
+                            <span class="tech-label-pro">⚡ Waktu Eksekusi:</span>
+                            <span class="tech-val-pro">{:.2f} ms</span>
+                        </div>
+                        <div class="tech-row-pro">
+                            <span class="tech-label-pro">📥 Ukuran Plaintext:</span>
+                            <span class="tech-val-pro">{} Byte</span>
+                        </div>
+                        <div class="tech-row-pro">
+                            <span class="tech-label-pro">📤 Encrypted Session Key Size:</span>
+                            <span class="tech-val-pro">{} Byte (256-bit AES Key wrapped in 2048-bit RSA)</span>
+                        </div>
+                    </div>
+                    """.format(proc_ms, len(plaintext_hybrid.encode('utf-8')), len(res["encrypted_session_key"])), unsafe_allow_html=True)
+
+                except Exception as e:
+                    st.error(f"❌ Kesalahan pada proses Enkripsi Hybrid: {str(e)}")
+
+    # --- TAB DEKRIPSI HYBRID ---
+    with tab_hybrid_dec:
+        st.caption("Masukkan komponen Base64 hasil enkripsi hybrid di bawah ini:")
+
+        enc_key_input = st.text_area("Encrypted Session Key (Base64):", height=80, key="enc_key_input")
+        nonce_input = st.text_input("Nonce / IV (Base64):", key="nonce_input")
+        ciphertext_hybrid_input = st.text_area("Ciphertext Data (Base64):", height=100, key="ciphertext_hybrid_input")
+
+        if st.button("🔓 Dekripsi Hybrid Now", key="btn_hybrid_dec"):
+            if not enc_key_input.strip() or not nonce_input.strip() or not ciphertext_hybrid_input.strip():
+                st.warning("⚠️ Harap lengkapi ketiga field input (Encrypted Session Key, Nonce, dan Ciphertext Data)!")
+            else:
+                try:
+                    start_t = time.perf_counter()
+                    
+                    enc_key_bytes = base64.b64decode(enc_key_input.strip())
+                    nonce_bytes = base64.b64decode(nonce_input.strip())
+                    ct_bytes = base64.b64decode(ciphertext_hybrid_input.strip())
+
+                    decrypted_bytes = decrypt_hybrid(
+                        ct_bytes,
+                        nonce_bytes,
+                        enc_key_bytes,
+                        st.session_state["rsa_private_key"]
+                    )
+                    
+                    end_t = time.perf_counter()
+                    proc_ms = (end_t - start_t) * 1000
+                    plaintext_out = decrypted_bytes.decode("utf-8")
+
+                    st.success("✅ Dekripsi Hybrid Berhasil! RSA Private Key berhasil membongkar Session Key & AES-GCM mendekripsi data.")
+                    st.text_area("Hasil Teks Asli (Plaintext):", value=plaintext_out, height=120, disabled=True)
+
+                except ValueError as ve:
+                    st.error(f"🛑 {str(ve)}")
+                except Exception as e:
+                    st.error("🛑 Dekripsi hybrid gagal: Format Base64 tidak valid, RSA Key mismatch, atau data telah diubah/rusak!")
+
+# -----------------------------------------------------------------------------
+# 9. MODUL 4 (PENGAYAAN): DEMO KEAMANAN (ECB VS MODE AMAN)
+# -----------------------------------------------------------------------------
+elif selected_menu == "🖼️ Demo Keamanan: ECB vs Mode Aman":
+    st.subheader("🖼️ Demo Keamanan Visual Citra: ECB vs Mode Aman (AES-256-GCM)")
+    st.caption("Visualisasi interaktif mengapa mode ECB (Electronic Codebook) BERBAHAYA & BOCOR POLA dibanding mode AEAD (AES-GCM).")
+
+    col_up, col_pass = st.columns([2, 1])
+
+    with col_up:
+        uploaded_img = st.file_uploader(
+            "Upload Citra Kustom (PNG/JPG/BMP) atau biarkan kosong untuk Citra Demo Default:",
+            type=["png", "jpg", "jpeg", "bmp"],
+            key="demo_img_upload"
+        )
+    with col_pass:
+        demo_pass = st.text_input(
+            "Password Kunci Demo:",
+            type="password",
+            placeholder="Masukkan password untuk demo...",
+            key="demo_pass_input"
+        )
+
+    if st.button("🚀 Jalankan Demo Visualisasi Keamanan Now", key="btn_run_demo"):
+        if not demo_pass:
+            st.warning("⚠️ Harap masukkan password kunci demo terlebih dahulu!")
+        else:
+            try:
+                with st.spinner("Memproses enkripsi ECB vs AES-GCM..."):
+                    if uploaded_img is not None:
+                        citra_asli = Image.open(uploaded_img).convert("RGB")
+                        # Resize jika terlalu besar agar pemrosesan cepat
+                        if citra_asli.width > 512 or citra_asli.height > 512:
+                            citra_asli.thumbnail((512, 512))
+                    else:
+                        citra_asli = buat_citra_demo(256, 256)
+
+                    data_piksel = citra_asli.tobytes()
+
+                    start_t = time.perf_counter()
+                    ciphertext_ecb, _ = enkripsi_ecb(data_piksel, demo_pass)
+                    _, ciphertext_gcm_murni, _, _ = enkripsi_gcm(data_piksel, demo_pass)
+                    end_t = time.perf_counter()
+
+                    img_ecb = bytes_ke_citra(ciphertext_ecb, citra_asli.size, mode="RGB")
+                    img_gcm = bytes_ke_citra(ciphertext_gcm_murni, citra_asli.size, mode="RGB")
+
+                st.success(f"✅ Demo selesai diproses dalam {(end_t - start_t)*1000:.2f} ms!")
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown("#### 1. Citra Asli (Original)")
+                    st.image(citra_asli, use_container_width=True)
+                    st.caption("Pola citra bitmap dengan area warna berulang/solid.")
+
+                with col2:
+                    st.markdown("#### 2. Hasil ECB (BOCOR POLA)")
+                    st.image(img_ecb, use_container_width=True)
+                    st.caption("🔴 **VULNERABLE:** Pola asli MASIH TERLIHAT! Blok plaintext identik selalu menghasilkan ciphertext identik.")
+
+                with col3:
+                    st.markdown("#### 3. Hasil AES-GCM (AMAN)")
+                    st.image(img_gcm, use_container_width=True)
+                    st.caption("🟢 **SECURE:** Noise acak sempurna! Keystream unik per-blok dari Counter Mode menghilangkan seluruh korelasi visual.")
+
+                st.divider()
+
+                # Penjelasan Teknis
+                with st.expander("🎓 Penjelasan Teknis & Analisis Kriptografi", expanded=True):
+                    st.markdown("""
+                    ### 💡 Kenapa Mode ECB Sangat Berbahaya?
+                    1. **Deterministic Mapping:** Mode Electronic Codebook (ECB) mengenkripsi tiap blok 16-byte secara terpisah dengan rumus $C_i = E(K, P_i)$.
+                    2. **Pola Bocor (Pattern Leakage):** Apabila data memiliki area warna solid atau struktur berulang (seperti piksel gambar), blok $P_i$ yang bernilai sama akan menghasilkan ciphertext $C_i$ yang bernilai sama pula.
+                    3. **Dampak:** Penyerang dapat dengan mudah menganalisis kontur, bentuk, dan pola data tanpa perlu memecahkan kunci enkripsi!
+
+                    ### 🛡️ Kenapa AES-GCM Menjamin Keamanan Visual & Data?
+                    1. **Stream Encryption & Unique Keystream:** AES-GCM memanfaatkan mode Counter (CTR), di mana setiap blok di-XOR dengan keystream unik yang dihasilkan dari kombinasi (Key, Nonce, Counter).
+                    2. **Indistinguishability:** Meskipun dua blok plaintext bernilai persis sama, hasil ciphertext akan bernilai acak sempurna (terlihat seperti *white noise*).
+                    3. **Authenticated Encryption (AEAD):** Selain kerahasiaan visual, AES-GCM dilengkapi tag otentikasi GHASH untuk menjamin data tidak dapat diubah oleh peretas.
+                    """)
+
+            except Exception as e:
+                st.error(f"❌ Gagal menjalankan demo keamanan: {str(e)}")
+
+# -----------------------------------------------------------------------------
+# 10. MODUL 5: TENTANG APLIKASI & DOKUMENTASI KRIPTOGRAFI
 # -----------------------------------------------------------------------------
 elif selected_menu == "ℹ️ Tentang & Dokumentasi":
     st.subheader("ℹ️ Dokumentasi Teknis & Penjelasan Kriptografi Modern")
@@ -981,8 +1199,19 @@ elif selected_menu == "ℹ️ Tentang & Dokumentasi":
             *   Hal ini membocorkan struktur plaintext tanpa perlu membobol kunci! Oleh karena itu, Nonce **wajib acak dan hanya digunakan satu kali**.
         """)
 
-    # 4. Format Output Biner Header
-    with st.expander("📦 4. Format Output & Susunan Header Binary"):
+    # 4. Hybrid & Demo Visual
+    with st.expander("🔐 4. Fitur Pengayaan: Hybrid Encryption & Demo Visual ECB"):
+        st.markdown("""
+        *   **Hybrid Encryption (RSA-OAEP + AES-GCM):**
+            *   Menggabungkan efisiensi enkripsi simetris (AES) dengan fleksibilitas pertukaran kunci enkripsi asimetris (RSA).
+            *   Session Key 256-bit dienkripsi dengan Public Key RSA pengirim/penerima menggunakan skema OAEP padding dengan SHA-256.
+        *   **Visualisasi Keamanan Citra (ECB vs AES-GCM):**
+            *   Membuktikan kelemahan mode ECB yang melestarikan korelasi piksel asli.
+            *   Menunjukkan keunggulan mode AEAD yang mengubah citra menjadi derau acak (*noise*).
+        """)
+
+    # 5. Format Output Biner Header
+    with st.expander("📦 5. Format Output & Susunan Header Binary"):
         st.markdown("""
         Hasil enkripsi teks maupun file dibungkus dalam susunan byte terstruktur:
         
@@ -1001,7 +1230,7 @@ elif selected_menu == "ℹ️ Tentang & Dokumentasi":
         """)
 
 # -----------------------------------------------------------------------------
-# 9. FOOTER
+# 11. FOOTER
 # -----------------------------------------------------------------------------
 st.markdown("""
 <div class="footer-pro">
