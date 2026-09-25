@@ -48,92 +48,114 @@ st.set_page_config(
 # 2. ADAPTIVE THEME (AUTO DARK/LIGHT) & RESPONSIVE MOBILE/DESKTOP CSS
 # -----------------------------------------------------------------------------
 def inject_custom_css():
-    st.markdown("""
+    # ---------------------------------------------------------------
+    # Tema gelap/terang di sini dikontrol LANGSUNG oleh toggle
+    # "Tampilan Aplikasi" di sidebar (via st.session_state), BUKAN
+    # oleh menu Dark/Light bawaan Streamlit (titik tiga kanan atas)
+    # ataupun tema OS/browser. Ini supaya hasilnya PASTI berubah saat
+    # toggle di-klik, tidak tergantung pengaturan di luar aplikasi.
+    # ---------------------------------------------------------------
+    if "app_theme_mode" not in st.session_state:
+        st.session_state["app_theme_mode"] = "☀️ Terang"
+
+    is_dark = st.session_state["app_theme_mode"] == "🌙 Gelap"
+
+    if is_dark:
+        theme_vars = """
+        --bg-main: #0a0f1c;
+        --bg-dot: rgba(148, 197, 214, 0.07);
+        --text-primary: #e6edf5;
+        --text-secondary: #b9c4d4;
+        --text-muted: #7c8aa5;
+        --card-bg: #101827;
+        --card-border: #1f2c42;
+        --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        --input-bg: #0d1420;
+        --input-border: #26344c;
+        --tab-text: #6b7a93;
+        --tech-bg: #0c1220;
+        --sidebar-bg: #0a1120;
+        --sidebar-border: #1f2c42;
+        --byte-salt-bg: #0e2a2c;
+        --byte-salt-text: #5eead4;
+        --byte-nonce-bg: #0d2338;
+        --byte-nonce-text: #7dd3fc;
+        --byte-cipher-bg: #131b32;
+        --byte-cipher-text: #93c5fd;
+        """
+    else:
+        theme_vars = """
+        --bg-main: #f3f6fb;
+        --bg-dot: rgba(15, 60, 90, 0.05);
+        --text-primary: #0f172a;
+        --text-secondary: #3b4a63;
+        --text-muted: #6b7a93;
+        --card-bg: #ffffff;
+        --card-border: #dfe6f0;
+        --card-shadow: 0 2px 10px rgba(15, 40, 70, 0.06);
+        --input-bg: #ffffff;
+        --input-border: #cdd7e5;
+        --tab-text: #8b98af;
+        --tech-bg: #eef2f8;
+        --sidebar-bg: #ffffff;
+        --sidebar-border: #e2e8f2;
+        --byte-salt-bg: #e6fbf6;
+        --byte-salt-text: #0f766e;
+        --byte-nonce-bg: #eaf3fe;
+        --byte-nonce-text: #175cd3;
+        --byte-cipher-bg: #eef1fb;
+        --byte-cipher-text: #3538cd;
+        """
+
+    css_template = """
     <style>
-    /* Google Fonts Import */
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&display=swap');
+    /* Google Fonts Import - Technical / Dashboard Look */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
     /* Global Typography & Font Family */
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* ---------------- CSS THEME VARIABLES (DEFAULT LIGHT) ---------------- */
+    /* ---------------- SEMBUNYIKAN MENU BAWAAN STREAMLIT (TITIK TIGA) ----------------
+       Menu "⋮" bawaan Streamlit punya pengaturan tema sendiri (terpisah dari toggle
+       kita di sidebar) yang TIDAK BISA disinkronkan dengan variabel CSS custom di
+       aplikasi ini (keterbatasan Streamlit, bukan bug kode kita). Supaya tidak ada
+       2 kontrol tema yang membingungkan / tidak sinkron, menu ini disembunyikan
+       sepenuhnya. Satu-satunya kontrol tema yang aktif adalah toggle di sidebar kiri.
+       Ini murni tampilan (CSS), tidak menyentuh logika aplikasi sama sekali. */
+    #MainMenu {
+        visibility: hidden !important;
+    }
+
+    /* =================================================================
+       CATATAN PENTING:
+       Nilai warna tema (terang/gelap) di bawah ini DIISI DARI PYTHON
+       (lihat theme_vars di atas), berdasarkan toggle sidebar. Bagian
+       --accent, --accent-soft, --btn-bg, --btn-bg-hover, --btn-text
+       SENGAJA tetap sama nilainya di kedua mode supaya warna tombol
+       & aksen emas TIDAK PERNAH berubah walau tampilan diganti.
+       Yang berubah hanya latar, kartu, dan warna teks dasar.
+       ================================================================= */
+
+    /* ---------------- CSS THEME VARIABLES (DIISI DARI PYTHON) ---------------- */
     :root {
-        --bg-main: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 40%, #e2e8f0 100%);
-        --text-primary: #0f172a;
-        --text-secondary: #334155;
-        --text-muted: #64748b;
-        --card-bg: #ffffff;
-        --card-border: #e2e8f0;
-        --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-        --input-bg: #ffffff;
-        --input-border: #cbd5e1;
-        --tab-bg: #e2e8f0;
-        --tab-text: #475569;
-        --tech-bg: #f8fafc;
-        --sidebar-bg: #ffffff;
-        --sidebar-border: #e2e8f0;
-        --byte-salt-bg: #e0e7ff;
-        --byte-salt-text: #3730a3;
-        --byte-nonce-bg: #e0f2fe;
-        --byte-nonce-text: #075985;
-        --byte-cipher-bg: #dcfce7;
-        --byte-cipher-text: #166534;
+    __THEME_VARS__
+
+        /* --- FIXED deep navy + teal/cyan "dark tech" accent (tidak berubah per tema) --- */
+        --accent: #14b8a6;
+        --accent-2: #38bdf8;
+        --accent-soft: rgba(20, 184, 166, 0.14);
+        --btn-bg: #0f172a;
+        --btn-bg-hover: #16233b;
+        --btn-text: #5eead4;
     }
 
-    /* ---------------- DARK MODE SUPPORT (SYSTEM & STREAMLIT TOGGLE) ---------------- */
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --bg-main: radial-gradient(circle at 50% 0%, #171126 0%, #07090e 70%, #040508 100%);
-            --text-primary: #f8fafc;
-            --text-secondary: #cbd5e1;
-            --text-muted: #94a3b8;
-            --card-bg: #131722;
-            --card-border: #2a324b;
-            --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-            --input-bg: #0c1017;
-            --input-border: #1e293b;
-            --tab-bg: rgba(13, 17, 23, 0.75);
-            --tab-text: #94a3b8;
-            --tech-bg: #070a11;
-            --sidebar-bg: #080c14;
-            --sidebar-border: rgba(255, 255, 255, 0.08);
-            --byte-salt-bg: #1e1b4b;
-            --byte-salt-text: #c7d2fe;
-            --byte-nonce-bg: #0c4a6e;
-            --byte-nonce-text: #bae6fd;
-            --byte-cipher-bg: #064e3b;
-            --byte-cipher-text: #a7f3d0;
-        }
-    }
-
-    [data-theme="dark"] {
-        --bg-main: radial-gradient(circle at 50% 0%, #171126 0%, #07090e 70%, #040508 100%);
-        --text-primary: #f8fafc;
-        --text-secondary: #cbd5e1;
-        --text-muted: #94a3b8;
-        --card-bg: #131722;
-        --card-border: #2a324b;
-        --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-        --input-bg: #0c1017;
-        --input-border: #1e293b;
-        --tab-bg: rgba(13, 17, 23, 0.75);
-        --tab-text: #94a3b8;
-        --tech-bg: #070a11;
-        --sidebar-bg: #080c14;
-        --sidebar-border: rgba(255, 255, 255, 0.08);
-        --byte-salt-bg: #1e1b4b;
-        --byte-salt-text: #c7d2fe;
-        --byte-nonce-bg: #0c4a6e;
-        --byte-nonce-text: #bae6fd;
-        --byte-cipher-bg: #064e3b;
-        --byte-cipher-text: #a7f3d0;
-    }
-
-    /* Apply Background */
+    /* Apply Background (dot-grid pattern - kesan dashboard teknis) */
     [data-testid="stAppViewContainer"] {
-        background: var(--bg-main) !important;
+        background-color: var(--bg-main) !important;
+        background-image: radial-gradient(var(--bg-dot) 1.2px, transparent 1.2px) !important;
+        background-size: 22px 22px !important;
         color: var(--text-primary) !important;
     }
 
@@ -143,9 +165,9 @@ def inject_custom_css():
 
     /* ---------------- BREATHING ROOM FOR DEPLOY & 3 DOTS MENU ---------------- */
     .block-container {
-        padding-top: 3.8rem !important;
-        padding-bottom: 3rem !important;
-        max-width: 1250px;
+        padding-top: 3.4rem !important;
+        padding-bottom: 2.6rem !important;
+        max-width: 1120px;
     }
 
     /* Dynamic Typography Overrides */
@@ -155,42 +177,50 @@ def inject_custom_css():
 
     h1, h2, h3, h4, h5, h6 {
         color: var(--text-primary) !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.3px;
+        font-weight: 600 !important;
+        letter-spacing: -0.2px;
     }
 
-    /* ---------------- HERO DASHBOARD BANNER ---------------- */
+    /* ---------------- HERO DASHBOARD HEADER (GRADIENT TOP BAR, LAYOUT BARU) ---------------- */
     .hero-container {
-        background: linear-gradient(135deg, #312e81 0%, #4338ca 40%, #0284c7 100%);
-        border-radius: 20px;
-        padding: 32px 38px;
-        margin-top: 10px;
-        margin-bottom: 26px;
-        box-shadow: 0 16px 32px -8px rgba(67, 56, 202, 0.35);
-        color: #ffffff !important;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 0;
+        margin-top: 6px;
+        margin-bottom: 22px;
+        box-shadow: var(--card-shadow);
         position: relative;
         overflow: hidden;
     }
 
     .hero-container::before {
         content: "";
-        position: absolute;
-        top: -50%; right: -10%; width: 350px; height: 350px;
-        background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 70%);
-        border-radius: 50%;
+        display: block;
+        height: 4px;
+        width: 100%;
+        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+    }
+
+    .hero-inner {
+        padding: 22px 28px 24px 28px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 18px;
     }
 
     .hero-badge-pill {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: rgba(255, 255, 255, 0.18);
-        backdrop-filter: blur(10px);
-        color: #ffffff !important;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        padding: 5px 14px;
+        background: var(--accent-soft);
+        color: var(--accent) !important;
+        border: 1px solid var(--card-border);
+        padding: 4px 12px;
         border-radius: 30px;
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         font-weight: 700;
         letter-spacing: 0.5px;
         text-transform: uppercase;
@@ -198,56 +228,106 @@ def inject_custom_css():
     }
 
     .hero-title {
-        color: #ffffff !important;
-        font-size: 2.3rem;
+        color: var(--text-primary) !important;
+        font-size: 1.85rem;
         font-weight: 800;
-        letter-spacing: -0.8px;
+        letter-spacing: -0.5px;
         margin: 0 0 6px 0;
-        line-height: 1.15;
+        line-height: 1.2;
     }
 
     .hero-subtitle {
-        color: #e0e7ff !important;
-        font-size: 1.05rem;
+        color: var(--text-muted) !important;
+        font-size: 0.94rem;
         font-weight: 400;
-        margin: 0 0 16px 0;
-        max-width: 800px;
+        margin: 0;
+        max-width: 620px;
     }
 
     .hero-tags {
         display: flex;
-        gap: 8px;
+        gap: 6px;
         flex-wrap: wrap;
+        justify-content: flex-end;
+        align-items: center;
     }
 
     .tag-item {
-        background: rgba(0, 0, 0, 0.22);
-        color: #f0f9ff !important;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 4px 12px;
+        background: var(--tech-bg);
+        color: var(--text-secondary) !important;
+        border: 1px solid var(--card-border);
+        padding: 4px 11px;
         border-radius: 8px;
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         font-weight: 600;
+        font-family: 'JetBrains Mono', monospace;
     }
 
-    /* ---------------- STREAMLIT TABS STYLING ---------------- */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background-color: var(--tab-bg);
-        padding: 6px;
-        border-radius: 14px;
+    /* ---------------- NAVIGASI MODUL: SEGMENTED PILL TABS (HORIZONTAL, DI ATAS) ---------------- */
+    .nav-radio-wrap div[role="radiogroup"] {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        background: var(--tech-bg);
         border: 1px solid var(--card-border);
+        border-radius: 14px;
+        padding: 6px;
+        margin-bottom: 22px;
+    }
+
+    .nav-radio-wrap div[role="radiogroup"] label {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 9px 16px;
+        margin: 0 !important;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .nav-radio-wrap div[role="radiogroup"] label:hover {
+        background: var(--card-bg);
+    }
+
+    .nav-radio-wrap div[role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
+
+    .nav-radio-wrap div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+        color: var(--text-secondary) !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+    }
+
+    .nav-radio-wrap div[role="radiogroup"] label:has(input:checked) {
+        background: var(--btn-bg) !important;
+        border-color: var(--accent) !important;
+    }
+
+    .nav-radio-wrap div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
+        color: var(--btn-text) !important;
+    }
+
+    /* ---------------- STREAMLIT TABS STYLING (UNDERLINE, MINIMAL) ---------------- */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 22px;
+        background-color: transparent;
+        padding: 0;
+        border-radius: 0;
+        border-bottom: 1px solid var(--card-border);
     }
 
     .stTabs [data-baseweb="tab"] {
-        height: 46px;
-        border-radius: 10px;
+        height: 42px;
+        border-radius: 0;
         color: var(--tab-text) !important;
-        font-weight: 600;
-        font-size: 0.96rem;
+        font-weight: 500;
+        font-size: 0.92rem;
         border: none !important;
-        padding: 0 22px;
-        transition: all 0.25s ease;
+        border-bottom: 2px solid transparent !important;
+        padding: 0 2px;
+        transition: all 0.2s ease;
+        background: transparent !important;
     }
 
     .stTabs [data-baseweb="tab"]:hover {
@@ -255,10 +335,11 @@ def inject_custom_css():
     }
 
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #4338ca 0%, #0284c7 100%) !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        box-shadow: 0 4px 14px rgba(67, 56, 202, 0.35);
+        background: transparent !important;
+        color: var(--text-primary) !important;
+        font-weight: 600 !important;
+        border-bottom: 2px solid var(--accent) !important;
+        box-shadow: none;
     }
 
     /* ---------------- FORM INPUTS ---------------- */
@@ -266,85 +347,99 @@ def inject_custom_css():
         background-color: var(--input-bg) !important;
         color: var(--text-primary) !important;
         border: 1px solid var(--input-border) !important;
-        border-radius: 12px !important;
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
-        font-size: 0.98rem !important;
-        transition: all 0.2s ease !important;
+        border-radius: 10px !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 0.95rem !important;
+        transition: all 0.15s ease !important;
     }
 
     .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: #4338ca !important;
-        box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.15) !important;
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px var(--accent-soft) !important;
     }
 
-    /* ---------------- BUTTONS ---------------- */
+    /* ---------------- HASIL DEKRIPSI (TEXTAREA DISABLED) TETAP TERBACA DI TEMA GELAP ----------------
+       Browser/Streamlit secara default memberi warna abu-abu redup untuk textarea yang
+       "disabled" (dipakai untuk menampilkan hasil dekripsi teks & hybrid). Warna redup itu
+       tidak ikut variabel tema kita, jadi kalau tema gelap jadi nyaris tidak terbaca.
+       Dipaksa di sini supaya tetap kontras & terbaca di kedua mode. */
+    .stTextArea textarea:disabled,
+    .stTextInput input:disabled {
+        color: var(--text-primary) !important;
+        -webkit-text-fill-color: var(--text-primary) !important;
+        opacity: 1 !important;
+        background-color: var(--input-bg) !important;
+    }
+
+    /* ---------------- BUTTONS (FIXED CHARCOAL + GOLD, TIDAK IKUT TEMA) ---------------- */
     div.stButton > button {
         width: 100%;
-        background: linear-gradient(135deg, #4338ca 0%, #2563eb 50%, #0284c7 100%) !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        font-size: 1.02rem !important;
-        letter-spacing: 0.3px !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 14px 28px !important;
-        transition: all 0.25s ease !important;
-        box-shadow: 0 6px 20px rgba(67, 56, 202, 0.3) !important;
+        background: var(--btn-bg) !important;
+        color: var(--btn-text) !important;
+        font-weight: 600 !important;
+        font-size: 0.96rem !important;
+        letter-spacing: 0.2px !important;
+        border: 1px solid var(--accent) !important;
+        border-radius: 10px !important;
+        padding: 11px 22px !important;
+        transition: background 0.15s ease !important;
+        box-shadow: none !important;
         cursor: pointer !important;
     }
 
     div.stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 10px 25px rgba(67, 56, 202, 0.45) !important;
-        background: linear-gradient(135deg, #3730a3 0%, #1d4ed8 50%, #0369a1 100%) !important;
+        background: var(--btn-bg-hover) !important;
+        border-color: var(--accent) !important;
+        transform: none !important;
+        box-shadow: none !important;
     }
 
     div.stDownloadButton > button {
         width: 100%;
-        background: linear-gradient(135deg, #059669 0%, #0284c7 100%) !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        font-size: 1rem !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 14px 28px !important;
-        transition: all 0.25s ease !important;
-        box-shadow: 0 6px 20px rgba(5, 150, 105, 0.3) !important;
+        background: transparent !important;
+        color: var(--accent) !important;
+        font-weight: 600 !important;
+        font-size: 0.94rem !important;
+        border: 1px solid var(--accent) !important;
+        border-radius: 10px !important;
+        padding: 11px 22px !important;
+        transition: all 0.15s ease !important;
+        box-shadow: none !important;
     }
 
     div.stDownloadButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 10px 25px rgba(2, 132, 199, 0.4) !important;
+        background: var(--accent-soft) !important;
+        transform: none !important;
     }
 
     /* ---------------- TECHNICAL EXPANDER & CODE ---------------- */
     .streamlit-expanderHeader {
         background: var(--card-bg) !important;
         border: 1px solid var(--card-border) !important;
-        border-radius: 14px !important;
+        border-radius: 12px !important;
         color: var(--text-primary) !important;
-        font-weight: 700 !important;
-        font-size: 1rem !important;
-        box-shadow: var(--card-shadow);
+        font-weight: 600 !important;
+        font-size: 0.96rem !important;
+        box-shadow: none !important;
     }
 
     .tech-panel-pro {
         background: var(--tech-bg);
         border: 1px solid var(--card-border);
-        border-left: 5px solid #4338ca;
-        border-radius: 14px;
-        padding: 20px;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.88rem;
-        margin-top: 14px;
-        margin-bottom: 20px;
+        border-left: 3px solid var(--accent);
+        border-radius: 12px;
+        padding: 18px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.84rem;
+        margin-top: 12px;
+        margin-bottom: 18px;
     }
 
     .tech-row-pro {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 0;
+        padding: 7px 0;
         border-bottom: 1px dashed var(--input-border);
     }
 
@@ -357,7 +452,7 @@ def inject_custom_css():
     }
 
     .tech-val-pro {
-        color: #4338ca;
+        color: var(--accent);
         font-weight: 600;
     }
 
@@ -365,32 +460,30 @@ def inject_custom_css():
     .byte-diagram {
         display: flex;
         gap: 6px;
-        margin-top: 14px;
-        font-family: 'Fira Code', monospace;
-        font-size: 0.82rem;
-        font-weight: 600;
+        margin-top: 12px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        font-weight: 500;
     }
     .byte-block {
-        padding: 10px 14px;
+        padding: 9px 12px;
         border-radius: 8px;
         text-align: center;
+        border: 1px solid var(--card-border);
     }
     .byte-salt {
         background: var(--byte-salt-bg);
         color: var(--byte-salt-text);
-        border: 1px solid rgba(199, 210, 254, 0.4);
         flex: 1;
     }
     .byte-nonce {
         background: var(--byte-nonce-bg);
         color: var(--byte-nonce-text);
-        border: 1px solid rgba(186, 230, 253, 0.4);
         flex: 1;
     }
     .byte-cipher {
         background: var(--byte-cipher-bg);
         color: var(--byte-cipher-text);
-        border: 1px solid rgba(187, 247, 208, 0.4);
         flex: 2;
     }
 
@@ -398,45 +491,50 @@ def inject_custom_css():
     [data-testid="stMetric"] {
         background: var(--card-bg) !important;
         border: 1px solid var(--card-border) !important;
-        border-radius: 14px !important;
-        padding: 14px 18px !important;
-        box-shadow: var(--card-shadow) !important;
+        border-radius: 12px !important;
+        padding: 12px 16px !important;
+        box-shadow: none !important;
     }
 
     [data-testid="stMetricLabel"] {
         color: var(--text-muted) !important;
-        font-size: 0.85rem !important;
-        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
     }
 
     [data-testid="stMetricValue"] {
-        color: #4338ca !important;
-        font-family: 'Fira Code', monospace !important;
-        font-size: 1.4rem !important;
-        font-weight: 700 !important;
+        color: var(--accent) !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 1.25rem !important;
+        font-weight: 600 !important;
     }
 
-    /* ---------------- SIDEBAR ADAPTIVE ---------------- */
+    /* ---------------- SIDEBAR ADAPTIVE (LEBIH RAPAT) ---------------- */
     [data-testid="stSidebar"] {
         background-color: var(--sidebar-bg) !important;
         border-right: 1px solid var(--sidebar-border) !important;
     }
 
+    [data-testid="stSidebar"] hr {
+        margin: 10px 0 !important;
+        border-color: var(--sidebar-border) !important;
+    }
+
     .sidebar-card-pro {
         background: var(--tech-bg);
         border: 1px solid var(--card-border);
-        border-radius: 16px;
-        padding: 18px;
-        margin-top: 22px;
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-top: 14px;
     }
 
     .sidebar-card-title-pro {
-        color: #4338ca;
-        font-size: 0.88rem;
-        font-weight: 800;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
-        margin-bottom: 12px;
+        letter-spacing: 0.6px;
+        margin-bottom: 10px;
         display: flex;
         align-items: center;
         gap: 6px;
@@ -444,8 +542,8 @@ def inject_custom_css():
 
     .member-item-pro {
         color: var(--text-secondary);
-        font-size: 0.88rem;
-        padding: 5px 0;
+        font-size: 0.84rem;
+        padding: 4px 0;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -455,68 +553,78 @@ def inject_custom_css():
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--byte-salt-bg);
-        color: var(--byte-salt-text);
-        border: 1px solid rgba(199, 210, 254, 0.4);
-        padding: 5px 14px;
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        padding: 3px 11px;
         border-radius: 20px;
-        font-size: 0.82rem;
-        font-weight: 700;
+        font-size: 0.76rem;
+        font-weight: 600;
     }
 
     .pill-badge-cyan {
-        background: var(--byte-nonce-bg);
-        color: var(--byte-nonce-text);
-        border: 1px solid rgba(186, 230, 253, 0.4);
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--card-border);
     }
 
     /* Footer */
     .footer-pro {
         text-align: center;
         color: var(--text-muted);
-        font-size: 0.85rem;
-        margin-top: 50px;
-        padding: 24px;
+        font-size: 0.8rem;
+        margin-top: 40px;
+        padding: 18px;
         border-top: 1px solid var(--card-border);
     }
 
     /* ---------------- MOBILE RESPONSIVE MEDIA QUERIES ---------------- */
     @media (max-width: 768px) {
         .block-container {
-            padding-top: 4.5rem !important;
+            padding-top: 4.2rem !important;
             padding-left: 1rem !important;
             padding-right: 1rem !important;
         }
-        .hero-container {
-            padding: 22px 20px !important;
-            border-radius: 16px !important;
-            margin-bottom: 20px !important;
+        .hero-inner {
+            padding: 18px 16px !important;
+            flex-direction: column !important;
+        }
+        .hero-tags {
+            justify-content: flex-start !important;
+            max-width: 100% !important;
         }
         .hero-title {
-            font-size: 1.7rem !important;
+            font-size: 1.4rem !important;
         }
         .hero-subtitle {
-            font-size: 0.95rem !important;
+            font-size: 0.86rem !important;
+        }
+        .nav-radio-wrap div[role="radiogroup"] {
+            overflow-x: auto !important;
+            flex-wrap: nowrap !important;
+        }
+        .nav-radio-wrap div[role="radiogroup"] label {
+            white-space: nowrap !important;
         }
         .stTabs [data-baseweb="tab-list"] {
-            gap: 6px !important;
-            padding: 4px !important;
+            gap: 12px !important;
         }
         .stTabs [data-baseweb="tab"] {
-            padding: 0 14px !important;
-            font-size: 0.85rem !important;
-            height: 42px !important;
+            font-size: 0.8rem !important;
+            height: 38px !important;
         }
         .byte-diagram {
             flex-direction: column !important;
         }
         div.stButton > button, div.stDownloadButton > button {
-            padding: 12px 18px !important;
-            font-size: 0.95rem !important;
+            padding: 10px 16px !important;
+            font-size: 0.9rem !important;
         }
     }
     </style>
-    """, unsafe_allow_html=True)
+    """
+    css_template = css_template.replace("__THEME_VARS__", theme_vars)
+    st.markdown(css_template, unsafe_allow_html=True)
 
 inject_custom_css()
 
@@ -525,54 +633,73 @@ inject_custom_css()
 # -----------------------------------------------------------------------------
 st.markdown("""
 <div class="hero-container">
-    <div class="hero-badge-pill">🛡️ Tugas Proyek Aplikasi Kriptografi — Topik A</div>
-    <div class="hero-title">CipherVault Studio Pro</div>
-    <div class="hero-subtitle">Platform Enkripsi & Dekripsi Modern AEAD, Hybrid Encryption (RSA + AES), & Visualisasi Keamanan</div>
-    <div class="hero-tags">
-        <span class="tag-item">🔑 Scrypt KDF</span>
-        <span class="tag-item">⚡ AES-256-GCM</span>
-        <span class="tag-item">🚀 ChaCha20-Poly1305</span>
-        <span class="tag-item">🔐 RSA-2048 OAEP</span>
-        <span class="tag-item">🖼️ ECB vs GCM Demo</span>
+    <div class="hero-inner">
+        <div>
+            <div class="hero-badge-pill">🛡️ Tugas Proyek Aplikasi Kriptografi — Topik A</div>
+            <div class="hero-title">CipherVault Studio Pro</div>
+            <div class="hero-subtitle">Platform Enkripsi & Dekripsi Modern AEAD, Hybrid Encryption (RSA + AES), & Visualisasi Keamanan</div>
+        </div>
+        <div class="hero-tags">
+            <span class="tag-item">🔑 Scrypt KDF</span>
+            <span class="tag-item">⚡ AES-256-GCM</span>
+            <span class="tag-item">🚀 ChaCha20</span>
+            <span class="tag-item">🔐 RSA-2048</span>
+            <span class="tag-item">🖼️ ECB vs GCM</span>
+        </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 4. SIDEBAR NAVIGATION & IDENTITAS KELOMPOK
+# 4. NAVIGASI MODUL (TAB HORIZONTAL DI ATAS, BUKAN DI SIDEBAR)
+# -----------------------------------------------------------------------------
+st.markdown('<div class="nav-radio-wrap">', unsafe_allow_html=True)
+selected_menu = st.radio(
+    "Pilih Modul Aplikasi:",
+    [
+        "🔐 Enkripsi / Dekripsi Teks",
+        "📁 Enkripsi / Dekripsi File",
+        "🔑 Hybrid Encryption (RSA-OAEP + AES)",
+        "🖼️ Demo Keamanan: ECB vs Mode Aman",
+        "ℹ️ Tentang & Dokumentasi"
+    ],
+    index=0,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="selected_menu_nav"
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# 4B. SIDEBAR: PANEL PENGATURAN & IDENTITAS KELOMPOK (BUKAN NAVIGASI LAGI)
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 📌 Navigasi Modul")
-    
-    selected_menu = st.radio(
-        "Pilih Modul Aplikasi:",
-        [
-            "🔐 Enkripsi / Dekripsi Teks",
-            "📁 Enkripsi / Dekripsi File",
-            "🔑 Hybrid Encryption (RSA-OAEP + AES)",
-            "🖼️ Demo Keamanan: ECB vs Mode Aman",
-            "ℹ️ Tentang & Dokumentasi"
-        ],
-        index=0
-    )
-    
-    st.divider()
-    st.markdown("### ⚡ Pengaturan Algoritma Utama")
-    
-    selected_algo = st.selectbox(
-        "Pilih Algoritma Simetris Utama:",
-        ["AES-256-GCM", "ChaCha20-Poly1305"],
-        help="AES-256-GCM (Block Cipher AEAD) atau ChaCha20-Poly1305 (Stream Cipher AEAD)."
-    )
+    st.markdown("### ⚙️ Panel Pengaturan")
 
-    # Badges Status Active Mode
-    algo_code = "AES-256-GCM" if selected_algo == "AES-256-GCM" else "ChaCha20-Poly1305"
+    st.radio(
+        "🌗 Tampilan Aplikasi:",
+        ["☀️ Terang", "🌙 Gelap"],
+        horizontal=True,
+        key="app_theme_mode",
+        help="Ganti tampilan terang/gelap aplikasi ini (terpisah dari menu Streamlit bawaan)."
+    )
+    st.divider()
+    st.markdown("### 🧭 Modul Aktif")
+
+    menu_desc = {
+        "🔐 Enkripsi / Dekripsi Teks": "Mengubah teks jadi ciphertext (dan sebaliknya) pakai enkripsi AEAD (AES-256-GCM / ChaCha20-Poly1305) agar isi pesan rahasia dan tidak bisa diubah diam-diam.",
+        "📁 Enkripsi / Dekripsi File": "Mengenkripsi/dekripsi file biner (dokumen, gambar, dll.) memakai algoritma AEAD yang sama, jadi seluruh isi file ikut terlindungi.",
+        "🔑 Hybrid Encryption (RSA-OAEP + AES)": "Menggabungkan RSA-OAEP untuk mengamankan kunci sesi dan AES-256-GCM untuk mengenkripsi datanya — pola yang umum dipakai di dunia nyata (mis. TLS).",
+        "🖼️ Demo Keamanan: ECB vs Mode Aman": "Membandingkan secara visual mode ECB yang membocorkan pola gambar dengan AES-GCM yang aman.",
+        "ℹ️ Tentang & Dokumentasi": "Penjelasan teknis algoritma & konsep kriptografi yang dipakai di aplikasi ini.",
+    }
+
     st.markdown(f"""
-    <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+    <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <span class="pill-badge">🟢 {selected_menu.split()[1] if len(selected_menu.split()) > 1 else selected_menu}</span>
-        <span class="pill-badge pill-badge-cyan">⚡ {algo_code}</span>
     </div>
     """, unsafe_allow_html=True)
+    st.caption(menu_desc.get(selected_menu, ""))
 
     st.divider()
     
@@ -585,6 +712,7 @@ with st.sidebar:
         <div class="member-item-pro">🛡️ <span>Cipher: AES-GCM & ChaCha20</span></div>
         <div class="member-item-pro">🔐 <span>Asimetris: RSA-OAEP 2048</span></div>
     </div>
+
     """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
@@ -662,7 +790,7 @@ if selected_menu == "🔐 Enkripsi / Dekripsi Teks":
             algo_text_enc = st.selectbox(
                 "Pilih Algoritma Enkripsi:",
                 ["AES-256-GCM", "ChaCha20-Poly1305"],
-                index=0 if selected_algo == "AES-256-GCM" else 1,
+                index=0,
                 key="algo_text_enc"
             )
             pass_text_enc = st.text_input(
@@ -724,7 +852,7 @@ if selected_menu == "🔐 Enkripsi / Dekripsi Teks":
             algo_text_dec = st.selectbox(
                 "Pilih Algoritma Dekripsi:",
                 ["AES-256-GCM", "ChaCha20-Poly1305"],
-                index=0 if selected_algo == "AES-256-GCM" else 1,
+                index=0,
                 key="algo_text_dec",
                 help="Pastikan algoritma dekripsi sama dengan saat enkripsi dilakukan."
             )
@@ -798,7 +926,7 @@ elif selected_menu == "📁 Enkripsi / Dekripsi File":
             algo_file_enc = st.selectbox(
                 "Pilih Algoritma File:",
                 ["AES-256-GCM", "ChaCha20-Poly1305"],
-                index=0 if selected_algo == "AES-256-GCM" else 1,
+                index=0,
                 key="algo_file_enc"
             )
             pass_file_enc = st.text_input(
@@ -872,7 +1000,7 @@ elif selected_menu == "📁 Enkripsi / Dekripsi File":
             algo_file_dec = st.selectbox(
                 "Pilih Algoritma Dekripsi File:",
                 ["AES-256-GCM", "ChaCha20-Poly1305"],
-                index=0 if selected_algo == "AES-256-GCM" else 1,
+                index=0,
                 key="algo_file_dec"
             )
             pass_file_dec = st.text_input(
