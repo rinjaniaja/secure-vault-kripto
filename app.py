@@ -13,6 +13,7 @@ import os
 import tempfile
 import base64
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 import io
 
 # Import fungsi backend dari crypto_utils.py (logika tidak diubah sama sekali)
@@ -31,7 +32,10 @@ from image_encryption_demo import (
     buat_citra_demo,
     enkripsi_ecb,
     enkripsi_gcm,
-    bytes_ke_citra
+    dekripsi_ecb,
+    dekripsi_gcm,
+    bytes_ke_citra,
+    buat_gambar_perbandingan
 )
 
 # -----------------------------------------------------------------------------
@@ -716,6 +720,56 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
+# 5B. HELPER FUNCTION: KONVERSI GAMBAR PIL KE BYTES PNG (UNTUK DOWNLOAD)
+# -----------------------------------------------------------------------------
+def gambar_ke_png_bytes(citra: Image.Image) -> bytes:
+    """Konversi objek PIL Image menjadi bytes PNG siap diunduh lewat st.download_button."""
+    buf = io.BytesIO()
+    citra.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def gambar_ke_png_bytes_dengan_metadata(citra: Image.Image, metadata: dict) -> bytes:
+    """
+    Sama seperti gambar_ke_png_bytes(), TAPI menyisipkan metadata teks
+    (mode, salt, nonce, ciphertext lengkap, dimensi asli) ke dalam chunk
+    tEXt PNG memakai PngInfo. Metadata ini TIDAK terlihat dan TIDAK
+    mengubah tampilan visual gambar sama sekali -- cuma "menempel" di
+    dalam file, supaya file PNG yang sama bisa diupload lagi nanti dan
+    didekripsi balik jadi citra asli, tanpa perlu simpan ciphertext
+    terpisah di tempat lain.
+
+    Kenapa perlu ciphertext LENGKAP disimpan sebagai teks base64, bukan
+    dari piksel gambarnya langsung? Karena piksel gambar (untuk ECB) bisa
+    kepotong akibat padding, dan (untuk GCM) tidak menyertakan 16-byte
+    authentication tag -- jadi piksel gambar SAJA tidak cukup untuk
+    dekripsi yang benar.
+    """
+    info = PngInfo()
+    for key, value in metadata.items():
+        info.add_text(f"cv_{key}", str(value))
+
+    buf = io.BytesIO()
+    citra.save(buf, format="PNG", pnginfo=info)
+    return buf.getvalue()
+
+
+def baca_metadata_png(citra: Image.Image) -> dict:
+    """
+    Ambil kembali metadata cv_* yang disisipkan oleh
+    gambar_ke_png_bytes_dengan_metadata(), dari file PNG yang diupload user.
+    Return dict kosong kalau tidak ada metadata sama sekali (berarti file
+    ini bukan hasil download dari demo ECB/GCM di aplikasi ini).
+    """
+    citra.load()  # pastikan semua chunk PNG (termasuk tEXt) sudah kebaca
+    hasil = {}
+    for key, value in citra.info.items():
+        if key.startswith("cv_"):
+            hasil[key[3:]] = value
+    return hasil
+
+
+# -----------------------------------------------------------------------------
 # 5. HELPER FUNCTION: PANEL DETAIL TEKNIS (EXPANDER INTERAKTIF)
 # -----------------------------------------------------------------------------
 def render_technical_panel(algo_name, process_time_ms, input_size_bytes, output_size_bytes, mode="text"):
@@ -1235,8 +1289,8 @@ elif selected_menu == "🖼️ Demo Keamanan: ECB vs Mode Aman":
                     data_piksel = citra_asli.tobytes()
 
                     start_t = time.perf_counter()
-                    ciphertext_ecb, _ = enkripsi_ecb(data_piksel, demo_pass)
-                    _, ciphertext_gcm_murni, _, _ = enkripsi_gcm(data_piksel, demo_pass)
+                    ciphertext_ecb, salt_ecb = enkripsi_ecb(data_piksel, demo_pass)
+                    ciphertext_gcm_full, ciphertext_gcm_murni, nonce_gcm, salt_gcm = enkripsi_gcm(data_piksel, demo_pass)
                     end_t = time.perf_counter()
 
                     img_ecb = bytes_ke_citra(ciphertext_ecb, citra_asli.size, mode="RGB")
@@ -1249,16 +1303,63 @@ elif selected_menu == "🖼️ Demo Keamanan: ECB vs Mode Aman":
                     st.markdown("#### 1. Citra Asli (Original)")
                     st.image(citra_asli, use_container_width=True)
                     st.caption("Pola citra bitmap dengan area warna berulang/solid.")
+                    st.download_button(
+                        label="⬇️ Unduh Citra Asli (.png)",
+                        data=gambar_ke_png_bytes(citra_asli),
+                        file_name="1_original.png",
+                        mime="image/png",
+                        key="dl_img_asli"
+                    )
 
                 with col2:
                     st.markdown("#### 2. Hasil ECB (BOCOR POLA)")
                     st.image(img_ecb, use_container_width=True)
                     st.caption("🔴 **VULNERABLE:** Pola asli MASIH TERLIHAT! Blok plaintext identik selalu menghasilkan ciphertext identik.")
+                    st.download_button(
+                        label="⬇️ Unduh Hasil ECB (.png) — bisa didekripsi ulang",
+                        data=gambar_ke_png_bytes_dengan_metadata(img_ecb, {
+                            "mode": "ecb",
+                            "salt": base64.b64encode(salt_ecb).decode(),
+                            "ciphertext": base64.b64encode(ciphertext_ecb).decode(),
+                            "width": citra_asli.width,
+                            "height": citra_asli.height,
+                        }),
+                        file_name="2_encrypted_ecb.png",
+                        mime="image/png",
+                        key="dl_img_ecb"
+                    )
 
                 with col3:
                     st.markdown("#### 3. Hasil AES-GCM (AMAN)")
                     st.image(img_gcm, use_container_width=True)
                     st.caption("🟢 **SECURE:** Noise acak sempurna! Keystream unik per-blok dari Counter Mode menghilangkan seluruh korelasi visual.")
+                    st.download_button(
+                        label="⬇️ Unduh Hasil AES-GCM (.png) — bisa didekripsi ulang",
+                        data=gambar_ke_png_bytes_dengan_metadata(img_gcm, {
+                            "mode": "gcm",
+                            "salt": base64.b64encode(salt_gcm).decode(),
+                            "nonce": base64.b64encode(nonce_gcm).decode(),
+                            "ciphertext": base64.b64encode(ciphertext_gcm_full).decode(),
+                            "width": citra_asli.width,
+                            "height": citra_asli.height,
+                        }),
+                        file_name="3_encrypted_gcm.png",
+                        mime="image/png",
+                        key="dl_img_gcm"
+                    )
+
+                # Gambar gabungan (Asli | ECB | AES-GCM) berdampingan -- siap tempel ke laporan
+                gambar_gabungan = buat_gambar_perbandingan(
+                    [citra_asli, img_ecb, img_gcm],
+                    ["Asli", "ECB (BOCOR POLA)", "AES-GCM (AMAN)"],
+                )
+                st.download_button(
+                    label="⬇️ Unduh Gambar Perbandingan Gabungan (untuk laporan)",
+                    data=gambar_ke_png_bytes(gambar_gabungan),
+                    file_name="4_perbandingan.png",
+                    mime="image/png",
+                    key="dl_img_gabungan"
+                )
 
                 st.divider()
 
@@ -1278,6 +1379,89 @@ elif selected_menu == "🖼️ Demo Keamanan: ECB vs Mode Aman":
 
             except Exception as e:
                 st.error(f"❌ Gagal menjalankan demo keamanan: {str(e)}")
+
+    st.divider()
+
+    # -------------------------------------------------------------------
+    # UPLOAD & DEKRIPSI ULANG CITRA TERENKRIPSI
+    # -------------------------------------------------------------------
+    st.markdown("### 🔓 Upload & Dekripsi Ulang Citra Terenkripsi")
+    st.caption(
+        "Upload file PNG hasil download dari demo di atas (yang labelnya "
+        "'bisa didekripsi ulang'), masukkan password yang sama, dan citra "
+        "asli akan dikembalikan. Metadata (salt/nonce/ciphertext lengkap) "
+        "sudah menempel otomatis di dalam file PNG itu sendiri."
+    )
+
+    col_up2, col_pass2 = st.columns([2, 1])
+    with col_up2:
+        uploaded_enc_img = st.file_uploader(
+            "Upload PNG hasil enkripsi (dari tombol download ECB/GCM di atas):",
+            type=["png"],
+            key="upload_dekripsi_img"
+        )
+    with col_pass2:
+        pass_dekripsi_img = st.text_input(
+            "Password Dekripsi:",
+            type="password",
+            placeholder="Masukkan password yang sama saat enkripsi...",
+            key="pass_dekripsi_img_input"
+        )
+
+    if st.button("🔓 Dekripsi Citra yang Diupload", key="btn_dekripsi_upload_img"):
+        if uploaded_enc_img is None:
+            st.warning("⚠️ Harap upload file PNG hasil enkripsi terlebih dahulu!")
+        elif not pass_dekripsi_img:
+            st.warning("⚠️ Harap masukkan password dekripsi!")
+        else:
+            try:
+                citra_upload = Image.open(uploaded_enc_img)
+                meta = baca_metadata_png(citra_upload)
+
+                if not meta or "mode" not in meta or "ciphertext" not in meta:
+                    st.error(
+                        "🛑 File ini tidak memiliki metadata enkripsi. Pastikan kamu "
+                        "upload file PNG yang didownload dari tombol 'bisa didekripsi "
+                        "ulang' di atas, bukan file gambar biasa."
+                    )
+                else:
+                    mode_meta = meta["mode"]
+                    salt_meta = base64.b64decode(meta["salt"])
+                    ciphertext_meta = base64.b64decode(meta["ciphertext"])
+                    ukuran_asli = (int(meta["width"]), int(meta["height"]))
+
+                    with st.spinner("Mendekripsi citra..."):
+                        start_dt = time.perf_counter()
+                        if mode_meta == "ecb":
+                            data_asli = dekripsi_ecb(ciphertext_meta, pass_dekripsi_img, salt_meta)
+                        elif mode_meta == "gcm":
+                            nonce_meta = base64.b64decode(meta["nonce"])
+                            data_asli = dekripsi_gcm(ciphertext_meta, pass_dekripsi_img, salt_meta, nonce_meta)
+                        else:
+                            raise ValueError(f"Mode metadata tidak dikenal: {mode_meta}")
+                        end_dt = time.perf_counter()
+
+                        citra_hasil_dekripsi = bytes_ke_citra(data_asli, ukuran_asli, mode="RGB")
+
+                    st.success(
+                        f"✅ Dekripsi berhasil dalam {(end_dt - start_dt)*1000:.2f} ms! "
+                        f"Mode terdeteksi: **{mode_meta.upper()}**."
+                    )
+                    st.image(citra_hasil_dekripsi, caption="Citra hasil dekripsi (dikembalikan ke bentuk asli)", use_container_width=False, width=300)
+                    st.download_button(
+                        label="⬇️ Unduh Citra Hasil Dekripsi (.png)",
+                        data=gambar_ke_png_bytes(citra_hasil_dekripsi),
+                        file_name="hasil_dekripsi.png",
+                        mime="image/png",
+                        key="dl_hasil_dekripsi_upload"
+                    )
+
+            except Exception as e:
+                st.error(
+                    "🛑 Dekripsi gagal! Kemungkinan besar password salah, atau file "
+                    "PNG sudah diubah/rusak (verifikasi gagal). "
+                    f"Detail teknis: {str(e)}"
+                )
 
 # -----------------------------------------------------------------------------
 # 10. MODUL 5: TENTANG APLIKASI & DOKUMENTASI KRIPTOGRAFI

@@ -111,8 +111,7 @@ def enkripsi_ecb(data: bytes, password: str) -> tuple[bytes, bytes]:
     memakai AEAD: AES-256-GCM / ChaCha20-Poly1305).
 
     Return: (ciphertext, salt) -- salt perlu disimpan untuk penurunan
-    ulang kunci saat dekripsi (tidak dipakai lebih lanjut di demo ini
-    karena tujuannya hanya visualisasi).
+    ulang kunci saat dekripsi.
     """
     key, salt = derive_key(password)  # reuse derive_key dari crypto_utils.py
 
@@ -125,6 +124,24 @@ def enkripsi_ecb(data: bytes, password: str) -> tuple[bytes, bytes]:
     ciphertext = encryptor.update(data_padded) + encryptor.finalize()
 
     return ciphertext, salt
+
+
+def dekripsi_ecb(ciphertext: bytes, password: str, salt: bytes) -> bytes:
+    """
+    Dekripsi balik hasil enkripsi ECB, untuk membuktikan bahwa walau ECB
+    membocorkan pola secara visual, ia tetap bisa dikembalikan sempurna
+    ke plaintext asli dengan password & salt yang benar. Ini menegaskan
+    bahwa masalah ECB BUKAN soal gagal dekripsi, melainkan soal
+    kebocoran informasi SELAMA data masih dalam bentuk terenkripsi.
+    """
+    key, _ = derive_key(password, salt)
+    cipher = Cipher(algorithms.AES(key), modes.ECB())
+    decryptor = cipher.decryptor()
+    data_padded = decryptor.update(ciphertext) + decryptor.finalize()
+
+    unpadder = padding.PKCS7(BLOCK_SIZE * 8).unpadder()
+    data_asli = unpadder.update(data_padded) + unpadder.finalize()
+    return data_asli
 
 
 # =============================================================================
@@ -150,6 +167,19 @@ def enkripsi_gcm(data: bytes, password: str) -> tuple[bytes, bytes, bytes, bytes
     ciphertext_murni = ciphertext_dengan_tag[:-16]
 
     return ciphertext_dengan_tag, ciphertext_murni, nonce, salt
+
+
+def dekripsi_gcm(ciphertext_dengan_tag: bytes, password: str, salt: bytes, nonce: bytes) -> bytes:
+    """
+    Dekripsi balik hasil enkripsi AES-GCM. Berbeda dengan ECB, proses ini
+    juga otomatis memverifikasi authentication tag -- kalau ciphertext
+    diubah sedikit saja, proses ini akan gagal (raise exception),
+    membuktikan AES-GCM juga menjaga INTEGRITAS data, bukan cuma kerahasiaan.
+    """
+    key, _ = derive_key(password, salt)
+    aesgcm = AESGCM(key)
+    data_asli = aesgcm.decrypt(nonce, ciphertext_dengan_tag, None)
+    return data_asli
 
 
 # =============================================================================
@@ -223,7 +253,7 @@ def main():
     data_piksel = citra_asli.tobytes()  # byte mentah RGB, ini yang dienkripsi
 
     # 2. Enkripsi ECB
-    ciphertext_ecb, _ = enkripsi_ecb(data_piksel, password)
+    ciphertext_ecb, salt_ecb = enkripsi_ecb(data_piksel, password)
     citra_ecb = bytes_ke_citra(ciphertext_ecb, citra_asli.size, mode="RGB")
     path_ecb = os.path.join(OUTPUT_DIR, "2_encrypted_ecb.png")
     citra_ecb.save(path_ecb)
@@ -231,7 +261,7 @@ def main():
     print("    -> Perhatikan: pola kotak & lingkaran ASLI MASIH TERLIHAT!")
 
     # 3. Enkripsi AES-GCM
-    _, ciphertext_gcm_murni, _, _ = enkripsi_gcm(data_piksel, password)
+    ciphertext_gcm_full, ciphertext_gcm_murni, nonce_gcm, salt_gcm = enkripsi_gcm(data_piksel, password)
     citra_gcm = bytes_ke_citra(ciphertext_gcm_murni, citra_asli.size, mode="RGB")
     path_gcm = os.path.join(OUTPUT_DIR, "3_encrypted_gcm.png")
     citra_gcm.save(path_gcm)
@@ -246,6 +276,25 @@ def main():
     path_gabungan = os.path.join(OUTPUT_DIR, "4_perbandingan.png")
     gabungan.save(path_gabungan)
     print(f"[4] Gambar perbandingan (untuk laporan) disimpan: {path_gabungan}")
+
+    # 5. BUKTIKAN KEDUANYA BISA DIDEKRIPSI BALIK DENGAN PASSWORD YANG BENAR
+    print("\n" + "=" * 70)
+    print("PEMBUKTIAN: DEKRIPSI BALIK KE DATA ASLI")
+    print("=" * 70)
+
+    hasil_dekripsi_ecb = dekripsi_ecb(ciphertext_ecb, password, salt_ecb)
+    cocok_ecb = hasil_dekripsi_ecb == data_piksel
+    print(f"[ECB]     Dekripsi balik berhasil dan identik dengan asli? {cocok_ecb}")
+
+    hasil_dekripsi_gcm = dekripsi_gcm(ciphertext_gcm_full, password, salt_gcm, nonce_gcm)
+    cocok_gcm = hasil_dekripsi_gcm == data_piksel
+    print(f"[AES-GCM] Dekripsi balik berhasil dan identik dengan asli? {cocok_gcm}")
+
+    print("\nKESIMPULAN TAMBAHAN:")
+    print("- Kedua mode BISA dikembalikan sempurna ke data asli dengan")
+    print("  password yang benar. Ini membuktikan masalah ECB BUKAN soal")
+    print("  gagal dekripsi, melainkan BOCORNYA POLA selama data masih")
+    print("  dalam bentuk terenkripsi (lihat 2_encrypted_ecb.png).")
 
     print("\nKESIMPULAN:")
     print("- ECB mengenkripsi tiap blok 16-byte secara independen dengan kunci")
