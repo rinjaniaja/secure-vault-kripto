@@ -260,41 +260,65 @@ def hitung_entropi(data: bytes) -> float:
 def uji_entropi_histogram():
     print("\n[4] Menghitung entropi dan membuat histogram byte...")
     password = "TestPassword123!"
-    plaintext = ("Ini adalah contoh teks plaintext yang cukup panjang untuk dianalisis "
-                 "distribusi byte-nya secara statistik. " * 20)
+    from PIL import Image
+    import io as _io
 
-    enc_aes = base64.b64decode(encrypt_text(plaintext, password))
-    enc_chacha = base64.b64decode(encrypt_text_chacha(plaintext, password))
+    teks = ("Ini adalah contoh teks plaintext yang cukup panjang untuk dianalisis "
+            "distribusi byte-nya secara statistik. " * 20).encode()
+    png_bytes = _ambil_berkas_uji("gambar_uji.png", _buat_png_valid)
+    pdf_bytes = _ambil_berkas_uji("dokumen_uji.pdf", _buat_pdf_valid)
+    piksel = Image.open(_io.BytesIO(png_bytes)).convert("RGB").tobytes()
 
-    entropi_plain = hitung_entropi(plaintext.encode())
-    entropi_aes = hitung_entropi(enc_aes)
-    entropi_chacha = hitung_entropi(enc_chacha)
+    sumber = [
+        ("Teks contoh", teks),
+        ("Piksel mentah gambar_uji", piksel),
+        ("gambar_uji.png", png_bytes),
+        ("dokumen_uji.pdf", pdf_bytes),
+    ]
 
-    hasil = pd.DataFrame([
-        {"Data": "Plaintext asli", "Entropi (bit/byte)": round(entropi_plain, 4)},
-        {"Data": "Cipherteks AES-256-GCM", "Entropi (bit/byte)": round(entropi_aes, 4)},
-        {"Data": "Cipherteks ChaCha20-Poly1305", "Entropi (bit/byte)": round(entropi_chacha, 4)},
-    ])
+    def _enkripsi(data, algo):
+        in_p = os.path.join(OUTPUT_DIR, "temp_ent_in.bin")
+        enc_p = os.path.join(OUTPUT_DIR, "temp_ent_enc.bin")
+        with open(in_p, "wb") as f:
+            f.write(data)
+        encrypt_file(in_p, enc_p, password, algorithm=algo)
+        with open(enc_p, "rb") as f:
+            hasil_enc = f.read()
+        os.remove(in_p)
+        os.remove(enc_p)
+        return hasil_enc
+
+    baris = []
+    kumpulan = []
+    for nama, data in sumber:
+        aes = _enkripsi(data, "aes")
+        cha = _enkripsi(data, "chacha")
+        baris.append({"Data": nama + ": plainteks", "Ukuran (byte)": len(data),
+                      "Entropi (bit/byte)": round(hitung_entropi(data), 4)})
+        baris.append({"Data": nama + ": AES-256-GCM", "Ukuran (byte)": len(aes),
+                      "Entropi (bit/byte)": round(hitung_entropi(aes), 4)})
+        baris.append({"Data": nama + ": ChaCha20-Poly1305", "Ukuran (byte)": len(cha),
+                      "Entropi (bit/byte)": round(hitung_entropi(cha), 4)})
+        kumpulan.append((nama, data, aes, cha))
+
+    hasil = pd.DataFrame(baris)
     print(hasil.to_string(index=False))
     print("Catatan: entropi maksimum teoretis adalah 8 bit/byte (distribusi byte seragam/acak sempurna).")
+    print("PNG dan PDF sudah terkompresi sehingga entropi plainteksnya sudah tinggi;")
+    print("piksel mentah dipakai sebagai pembanding tanpa kompresi.")
 
-    # Bikin histogram
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    for ax, data, judul in zip(
-        axes,
-        [plaintext.encode(), enc_aes, enc_chacha],
-        ["Plaintext", "Cipherteks AES-GCM", "Cipherteks ChaCha20"]
-    ):
-        ax.hist(list(data), bins=256, range=(0, 255), color="steelblue")
-        ax.set_title(judul)
-        ax.set_xlabel("Nilai byte (0-255)")
-        ax.set_ylabel("Frekuensi")
+    fig, axes = plt.subplots(len(kumpulan), 3, figsize=(15, 3.2 * len(kumpulan)))
+    for r, (nama, data, aes, cha) in enumerate(kumpulan):
+        for c, (isi, judul) in enumerate([(data, "Plainteks"), (aes, "AES-GCM"), (cha, "ChaCha20")]):
+            hitung = np.bincount(np.frombuffer(isi, dtype=np.uint8), minlength=256)
+            axes[r, c].bar(range(256), hitung, width=1.0, color="steelblue")
+            axes[r, c].set_title(nama + " - " + judul, fontsize=9)
+            axes[r, c].set_xlabel("Nilai byte (0-255)")
+            axes[r, c].set_ylabel("Frekuensi")
     plt.tight_layout()
     histogram_path = os.path.join(OUTPUT_DIR, "histogram_byte.png")
-    plt.savefig(histogram_path, dpi=120)
+    plt.savefig(histogram_path, dpi=100)
     plt.close()
-    print(f"Histogram disimpan di: {histogram_path}")
-
     return hasil
 
 
