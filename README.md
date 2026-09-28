@@ -44,7 +44,7 @@ Pilih menu Enkripsi/Dekripsi File. Untuk enkripsi, upload file seperti gambar at
 ## Fitur Pengayaan
 
 ### 1. Hybrid Encryption (RSA-OAEP + AES-256-GCM)
-Modul `hybrid_crypto.py` menyediakan enkripsi hybrid: session key AES-256 dibangkitkan acak, dipakai untuk mengenkripsi data dengan AES-256-GCM, lalu session key tersebut dibungkus dengan RSA-OAEP (padding MGF1-SHA256) memakai public key penerima. Modul ini dipakai lewat kode Python langsung (belum terhubung ke antarmuka Streamlit), fungsi utamanya: `generate_rsa_keypair()`, `encrypt_hybrid()`, dan `decrypt_hybrid()`.
+Modul `hybrid_crypto.py` menyediakan enkripsi hybrid: session key AES-256 dibangkitkan acak, dipakai untuk mengenkripsi data dengan AES-256-GCM, lalu session key tersebut dibungkus dengan RSA-OAEP (padding MGF1-SHA256) memakai public key penerima. Modul ini terhubung ke antarmuka web melalui menu **Hybrid Encryption**, yang memiliki tab Enkripsi Hybrid dan Dekripsi Hybrid. Pasangan kunci RSA 2048-bit dibuat otomatis dan disimpan di memori sesi (tidak ditulis ke berkas). Untuk mendekripsi, tempel tiga komponen hasil enkripsi (Encrypted Session Key, Nonce, dan Ciphertext dalam Base64) dari proses enkripsi yang sama, tanpa memuat ulang halaman (kunci RSA baru dibuat bila halaman dimuat ulang atau tombol generate ditekan). Fungsi utamanya: `generate_rsa_keypair()`, `encrypt_hybrid()`, dan `decrypt_hybrid()`.
 
 ### 2. REST API dengan Autentikasi JWT (HMAC-SHA512)
 Modul `api.py` menyediakan REST API berbasis Flask dengan endpoint `/login`, `/encrypt`, dan `/decrypt`. Endpoint `/encrypt` dan `/decrypt` wajib menyertakan token JWT (didapat dari `/login`) di header `Authorization: Bearer <token>`.
@@ -87,4 +87,23 @@ curl -X POST http://127.0.0.1:5000/encrypt -H "Content-Type: application/json" -
 curl -X POST http://127.0.0.1:5000/decrypt -H "Content-Type: application/json" -H "Authorization: Bearer TOKEN" -d "{\"ciphertext\":\"CIPHERTEXT\",\"password\":\"pass123\"}"
 ```
 
-Catatan: `hybrid_crypto.py` dan `api.py` berjalan sebagai modul/server terpisah dari antarmuka Streamlit (`app.py`), sesuai desain arsitektur yang memisahkan fitur inti (UI interaktif) dari fitur pengayaan (modul mandiri dan layanan API).
+Catatan: `api.py` berjalan sebagai server Flask terpisah dari antarmuka Streamlit (`app.py`). Server dijalankan dengan `python api.py` setelah kedua environment variable di atas diatur, dan diakses lewat HTTP (curl atau Postman).
+
+### 3. Visualisasi ECB vs AES-GCM
+Tersedia lewat menu **Demo Keamanan: ECB vs Mode Aman** di aplikasi web. Pengguna mengisi password (wajib), boleh mengunggah citra sendiri (PNG/JPG/BMP) atau memakai citra demo bawaan, lalu menjalankan demo. Hasilnya tiga citra berdampingan: citra asli, hasil ECB (pola citra masih terlihat), dan hasil AES-GCM (derau acak tanpa pola). Mode ECB hanya dipakai di demo ini sebagai pembanding edukatif, tidak dipakai untuk enkripsi sesungguhnya di aplikasi.
+
+Demo yang sama juga dapat dijalankan sebagai skrip mandiri (`image_encryption_demo.py`). Password wajib diberikan lewat environment variable `DEMO_PASSWORD`:
+
+**Windows (Command Prompt):**
+```
+set DEMO_PASSWORD=isi_password_sendiri
+python image_encryption_demo.py
+```
+
+**Mac/Linux:**
+```
+export DEMO_PASSWORD=isi_password_sendiri
+python image_encryption_demo.py
+```
+
+Hasilnya tersimpan di folder `output/` (citra asli, hasil ECB, hasil AES-GCM, dan gambar perbandingan).
