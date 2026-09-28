@@ -86,6 +86,15 @@ def inject_custom_css():
         --byte-nonce-text: #7dd3fc;
         --byte-cipher-bg: #131b32;
         --byte-cipher-text: #93c5fd;
+        --btn-dl-text: #5eead4;
+        --btn-bg: #0f172a;
+        --btn-bg-hover: #16233b;
+        --btn-text: #5eead4;
+        --btn-border: #14b8a6;
+        --btn-shadow: none;
+        --btn-dl-bg: transparent;
+        --btn-dl-hover: rgba(20, 184, 166, 0.14);
+        color-scheme: dark;
         """
     else:
         theme_vars = """
@@ -109,6 +118,15 @@ def inject_custom_css():
         --byte-nonce-text: #175cd3;
         --byte-cipher-bg: #eef1fb;
         --byte-cipher-text: #3538cd;
+        --btn-dl-text: #0f172a;
+        --btn-bg: #ffffff;
+        --btn-bg-hover: #f1f5f9;
+        --btn-text: #0f172a;
+        --btn-border: #94a3b8;
+        --btn-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+        --btn-dl-bg: #ffffff;
+        --btn-dl-hover: #f1f5f9;
+        color-scheme: light;
         """
 
     css_template = """
@@ -136,7 +154,7 @@ def inject_custom_css():
        CATATAN PENTING:
        Nilai warna tema (terang/gelap) di bawah ini DIISI DARI PYTHON
        (lihat theme_vars di atas), berdasarkan toggle sidebar. Bagian
-       --accent, --accent-soft, --btn-bg, --btn-bg-hover, --btn-text
+       --accent, --accent-soft (warna tombol kini per-mode, lihat theme_vars)
        SENGAJA tetap sama nilainya di kedua mode supaya warna tombol
        & aksen emas TIDAK PERNAH berubah walau tampilan diganti.
        Yang berubah hanya latar, kartu, dan warna teks dasar.
@@ -150,9 +168,6 @@ def inject_custom_css():
         --accent: #14b8a6;
         --accent-2: #38bdf8;
         --accent-soft: rgba(20, 184, 166, 0.14);
-        --btn-bg: #0f172a;
-        --btn-bg-hover: #16233b;
-        --btn-text: #5eead4;
     }
 
     /* Apply Background (dot-grid pattern - kesan dashboard teknis) */
@@ -305,7 +320,8 @@ def inject_custom_css():
 
     .nav-radio-wrap div[role="radiogroup"] label:has(input:checked) {
         background: var(--btn-bg) !important;
-        border-color: var(--accent) !important;
+        border-color: var(--btn-border) !important;
+        box-shadow: var(--btn-shadow) !important;
     }
 
     .nav-radio-wrap div[role="radiogroup"] label:has(input:checked) div[data-testid="stMarkdownContainer"] p {
@@ -383,37 +399,174 @@ def inject_custom_css():
         font-weight: 600 !important;
         font-size: 0.96rem !important;
         letter-spacing: 0.2px !important;
-        border: 1px solid var(--accent) !important;
+        border: 1px solid var(--btn-border) !important;
         border-radius: 10px !important;
         padding: 11px 22px !important;
         transition: background 0.15s ease !important;
-        box-shadow: none !important;
+        box-shadow: var(--btn-shadow) !important;
         cursor: pointer !important;
     }
 
     div.stButton > button:hover {
         background: var(--btn-bg-hover) !important;
-        border-color: var(--accent) !important;
+        border-color: var(--btn-border) !important;
         transform: none !important;
-        box-shadow: none !important;
+        box-shadow: var(--btn-shadow) !important;
     }
 
     div.stDownloadButton > button {
         width: 100%;
-        background: transparent !important;
-        color: var(--accent) !important;
+        background: var(--btn-dl-bg) !important;
+        color: var(--btn-dl-text) !important;
         font-weight: 600 !important;
         font-size: 0.94rem !important;
-        border: 1px solid var(--accent) !important;
+        border: 1px solid var(--btn-border) !important;
         border-radius: 10px !important;
         padding: 11px 22px !important;
         transition: all 0.15s ease !important;
-        box-shadow: none !important;
+        box-shadow: var(--btn-shadow) !important;
     }
 
     div.stDownloadButton > button:hover {
-        background: var(--accent-soft) !important;
+        background: var(--btn-dl-hover) !important;
         transform: none !important;
+    }
+
+    /* ---------------- PERBAIKAN KONTRAS: TOMBOL & KOTAK INPUT (TERANG & GELAP) ----------------
+       Aturan global "p, span, label { color: var(--text-secondary) }" di atas ikut mengenai
+       teks DI DALAM tombol, uploader, dan kotak input. Di mode terang, teks itu berwarna
+       gelap sedangkan latar tombol/uploader tetap gelap sehingga tidak terlihat.
+       Blok ini memaksa warna teks, latar, dan border komponen tersebut mengikuti variabel tema. */
+
+    /* Teks di dalam tombol */
+    div.stButton > button,
+    div.stButton > button p,
+    div.stButton > button span,
+    div.stButton > button div {
+        color: var(--btn-text) !important;
+    }
+
+    div.stDownloadButton > button,
+    div.stDownloadButton > button p,
+    div.stDownloadButton > button span,
+    div.stDownloadButton > button div {
+        color: var(--btn-dl-text) !important;
+    }
+
+    /* Kotak input teks / password / textarea */
+    div[data-baseweb="input"],
+    div[data-baseweb="base-input"],
+    div[data-baseweb="textarea"] {
+        background-color: var(--input-bg) !important;
+        border-color: var(--input-border) !important;
+        border-radius: 10px !important;
+    }
+
+    .stTextInput input::placeholder,
+    .stTextArea textarea::placeholder {
+        color: var(--text-muted) !important;
+        -webkit-text-fill-color: var(--text-muted) !important;
+        opacity: 1 !important;
+    }
+
+    /* Kolom password: area ikon "mata" (sisi kanan) harus satu warna dengan kotak input */
+    [data-testid="stTextInputRootElement"] {
+        background-color: var(--input-bg) !important;
+        border: 1px solid var(--input-border) !important;
+        border-radius: 10px !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stTextInputRootElement"]:focus-within {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px var(--accent-soft) !important;
+    }
+    div[data-baseweb="input"],
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="input"] > div > div,
+    div[data-baseweb="base-input"] {
+        background-color: var(--input-bg) !important;
+    }
+    div[data-baseweb="input"] button {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: var(--text-secondary) !important;
+    }
+    div[data-baseweb="input"] button:hover {
+        background: var(--tech-bg) !important;
+        color: var(--text-primary) !important;
+    }
+    div[data-baseweb="input"] button span,
+    div[data-baseweb="input"] button div,
+    div[data-baseweb="input"] button [data-testid="stIconMaterial"] {
+        color: inherit !important;
+        background: transparent !important;
+    }
+    div[data-baseweb="input"] button svg,
+    div[data-baseweb="input"] button svg path {
+        fill: currentColor !important;
+        color: inherit !important;
+    }
+
+    /* Selectbox (pilih algoritma) */
+    div[data-baseweb="select"] > div {
+        background-color: var(--input-bg) !important;
+        border: 1px solid var(--input-border) !important;
+        border-radius: 10px !important;
+    }
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] div,
+    div[data-baseweb="select"] input {
+        color: var(--text-primary) !important;
+        -webkit-text-fill-color: var(--text-primary) !important;
+    }
+    div[data-baseweb="select"] svg {
+        fill: var(--text-muted) !important;
+    }
+
+    /* Daftar dropdown (popover) */
+    div[data-baseweb="popover"] ul,
+    div[data-baseweb="popover"] [data-baseweb="menu"] {
+        background-color: var(--card-bg) !important;
+    }
+    div[data-baseweb="popover"] li,
+    div[data-baseweb="popover"] li span,
+    div[data-baseweb="popover"] li div {
+        color: var(--text-primary) !important;
+        background-color: transparent !important;
+    }
+    div[data-baseweb="popover"] li:hover,
+    div[data-baseweb="popover"] li[aria-selected="true"] {
+        background-color: var(--accent-soft) !important;
+    }
+
+    /* Kotak upload file (dropzone) */
+    [data-testid="stFileUploaderDropzone"] {
+        background-color: var(--input-bg) !important;
+        border: 1.5px dashed var(--input-border) !important;
+        border-radius: 12px !important;
+    }
+    [data-testid="stFileUploaderDropzone"] span,
+    [data-testid="stFileUploaderDropzone"] small,
+    [data-testid="stFileUploaderDropzone"] div {
+        color: var(--text-secondary) !important;
+    }
+    [data-testid="stFileUploaderDropzone"] svg {
+        fill: var(--text-muted) !important;
+        color: var(--text-muted) !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button {
+        background: var(--btn-bg) !important;
+        border: 1px solid var(--btn-border) !important;
+        border-radius: 8px !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button,
+    [data-testid="stFileUploaderDropzone"] button span,
+    [data-testid="stFileUploaderDropzone"] button div {
+        color: var(--btn-text) !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button svg {
+        fill: var(--btn-text) !important;
     }
 
     /* ---------------- TECHNICAL EXPANDER & CODE ---------------- */
@@ -830,6 +983,51 @@ def render_technical_panel(algo_name, process_time_ms, input_size_bytes, output_
 # -----------------------------------------------------------------------------
 # 6. MODUL 1: ENKRIPSI & DEKRIPSI TEKS
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# HELPER: TAMPILKAN CIPHERTEKS (BASE64 / HEX) + UNDUH
+# -----------------------------------------------------------------------------
+BATAS_TAMPIL_CIPHERTEKS = 20_000  # jumlah karakter maksimum yang ditampilkan di layar
+
+
+def _tombol_unduh(label, data, file_name, mime, key):
+    """download_button; pada Streamlit >= 1.43 pakai on_click='ignore' agar hasil tidak hilang saat diklik."""
+    try:
+        versi = tuple(int(x) for x in st.__version__.split(".")[:2])
+    except Exception:
+        versi = (0, 0)
+    if versi >= (1, 43):
+        st.download_button(label, data=data, file_name=file_name, mime=mime, key=key, on_click="ignore")
+    else:
+        st.download_button(label, data=data, file_name=file_name, mime=mime, key=key)
+
+
+def tampilkan_cipherteks(data: bytes, nama: str, key_prefix: str, b64_teks: str = None):
+    """
+    Tampilkan cipherteks (bytes) dalam dua tab: Base64 dan Hex.
+    st.code otomatis punya tombol salin. Jika data besar, tampilan dipotong
+    (agar UI tidak berat) dan versi lengkap tersedia lewat tombol unduh .txt.
+    b64_teks: string Base64 asli (dipakai apa adanya bila diberikan, mis. hasil modul teks).
+    """
+    b64 = b64_teks if b64_teks is not None else base64.b64encode(data).decode("ascii")
+    hx = data.hex()
+
+    tab_b64, tab_hex = st.tabs(["Base64", "Hex"])
+    for tab, isi, label, ext in ((tab_b64, b64, "Base64", "b64"), (tab_hex, hx, "Hex", "hex")):
+        with tab:
+            terpotong = len(isi) > BATAS_TAMPIL_CIPHERTEKS
+            st.code(isi[:BATAS_TAMPIL_CIPHERTEKS] + ("…" if terpotong else ""), language="text")
+            if terpotong:
+                st.caption(
+                    f"Ditampilkan {BATAS_TAMPIL_CIPHERTEKS:,} dari {len(isi):,} karakter "
+                    f"(tombol salin hanya menyalin bagian yang tampil). "
+                    f"Unduh untuk mendapatkan versi lengkap."
+                )
+            _tombol_unduh(
+                f"⬇️ Unduh {label} lengkap (.txt)", isi,
+                f"{nama}.{ext}.txt", "text/plain", f"dl_{key_prefix}_{ext}"
+            )
+
+
 if selected_menu == "🔐 Enkripsi / Dekripsi Teks":
     st.subheader("🔐 Modul Enkripsi & Dekripsi Teks Rahasia")
     st.caption("Amankan pesan teks rahasia menjadi ciphertext Base64 terotentikasi atau dekripsi pesan kembali ke bentuk semula.")
@@ -881,8 +1079,16 @@ if selected_menu == "🔐 Enkripsi / Dekripsi Teks":
 
                     st.success("✅ Teks berhasil dienkripsi!")
                     
-                    st.markdown("**Hasil Ciphertext (Format Base64):**")
-                    st.code(ciphertext_b64, language="text")
+                    st.markdown("**Hasil Ciphertext (Base64 / Hex):**")
+                    try:
+                        tampilkan_cipherteks(
+                            base64.b64decode(ciphertext_b64),
+                            nama="ciphertext_teks",
+                            key_prefix="teks",
+                            b64_teks=ciphertext_b64
+                        )
+                    except Exception:
+                        st.code(ciphertext_b64, language="text")
                     
                     input_bytes = len(plaintext_input.encode('utf-8'))
                     output_bytes = len(ciphertext_b64.encode('utf-8'))
@@ -1033,6 +1239,13 @@ elif selected_menu == "📁 Enkripsi / Dekripsi File":
                             data=encrypted_bytes,
                             file_name=f"{uploaded_file_enc.name}.enc",
                             mime="application/octet-stream"
+                        )
+                        
+                        st.markdown("**Hasil Ciphertext File (Base64 / Hex):**")
+                        tampilkan_cipherteks(
+                            encrypted_bytes,
+                            nama=uploaded_file_enc.name,
+                            key_prefix="file"
                         )
                         
                         render_technical_panel(
@@ -1538,7 +1751,7 @@ elif selected_menu == "ℹ️ Tentang & Dokumentasi":
         2. **Byte 16 s/d 27 (12B):** Nonce acak untuk menginisialisasi cipher.
         3. **Byte 28 s/d Selesai:** Ciphertext asli + 16-byte Authentication Tag di ujung data.
         
-        *Pada modul teks, susunan biner ini dienkode ke format **Base64** agar mudah disalin dan ditransmisikan.*
+        *Pada modul teks maupun file, susunan biner ini dapat ditampilkan dalam format **Base64** atau **Hex** agar mudah disalin dan ditransmisikan.*
         """)
 
 # -----------------------------------------------------------------------------
