@@ -12,7 +12,10 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
+
 from crypto_utils import (
+    derive_key,
     encrypt_text, decrypt_text,
     encrypt_text_chacha, decrypt_text_chacha,
     encrypt_file, decrypt_file,
@@ -21,11 +24,16 @@ from crypto_utils import (
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# Folder berkas uji (bagian luaran: "berkas uji" pada Bagian 5 dokumen tugas).
+# Letakkan gambar dan PDF ASLI dengan nama gambar_uji.png dan dokumen_uji.pdf
+# di folder ini sebelum menjalankan script. Kalau belum ada, script membuat
+# berkas valid otomatis dan menyimpannya di sini.
+TEST_FILES_DIR = os.path.join(os.path.dirname(__file__), "test_files")
+os.makedirs(TEST_FILES_DIR, exist_ok=True)
+
 
 # =========================================================
-# HELPER: file GAMBAR dan PDF yang BENAR-BENAR VALID
-# (dipakai di uji_kebenaran_dekripsi, menggantikan random bytes
-# berlabel header palsu yang dipakai sebelumnya)
+# HELPER: berkas GAMBAR dan PDF untuk uji kebenaran dekripsi
 # =========================================================
 def _buat_png_valid() -> bytes:
     """PNG kecil (32x32) yang valid, dibuat memakai Pillow."""
@@ -40,7 +48,7 @@ def _buat_png_valid() -> bytes:
 
 def _buat_pdf_valid() -> bytes:
     """PDF satu halaman kosong yang valid secara struktur (tanpa dependency
-    tambahan seperti reportlab), bisa dibuka pembaca PDF standar."""
+    tambahan), bisa dibuka pembaca PDF standar."""
     return b"""%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -60,8 +68,19 @@ xref
 trailer
 << /Size 4 /Root 1 0 R >>
 startxref
-190
+186
 %%EOF"""
+
+
+def _ambil_berkas_uji(nama: str, pembuat) -> bytes:
+    """Pakai berkas asli di benchmark/test_files/ bila ada. Kalau belum ada,
+    buat otomatis lalu simpan di sana supaya ikut menjadi berkas uji."""
+    path = os.path.join(TEST_FILES_DIR, nama)
+    if not os.path.exists(path):
+        with open(path, "wb") as f:
+            f.write(pembuat())
+    with open(path, "rb") as f:
+        return f.read()
 
 
 # =========================================================
@@ -72,7 +91,7 @@ def uji_kebenaran_dekripsi():
     password = "TestPassword123!"
     hasil = []
 
-    # 8 input teks bervariasi + 2 input file biner (simulasi gambar & PDF)
+    # 8 input teks bervariasi + 2 berkas (gambar & PDF)
     input_teks = [
         "Halo dunia",
         "A" * 500,
@@ -90,13 +109,10 @@ def uji_kebenaran_dekripsi():
         benar = (dec == teks)
         hasil.append({"No": i, "Jenis Input": f"Teks #{i}", "Ukuran (byte)": len(teks.encode()), "Berhasil": benar})
 
-    # Input file biner: GAMBAR dan PDF yang BENAR-BENAR VALID (bukan sekadar
-    # byte acak berlabel header palsu), sesuai syarat eksplisit dosen bahwa
-    # dari 10 test case kebenaran dekripsi harus ada minimal 1 file gambar
-    # dan 1 file PDF yang diuji.
+    # Berkas gambar dan PDF (syarat eksplisit dosen: minimal 1 gambar dan 1 PDF)
     file_tests = [
-        ("gambar_uji.png", _buat_png_valid()),
-        ("dokumen_uji.pdf", _buat_pdf_valid()),
+        ("gambar_uji.png", _ambil_berkas_uji("gambar_uji.png", _buat_png_valid)),
+        ("dokumen_uji.pdf", _ambil_berkas_uji("dokumen_uji.pdf", _buat_pdf_valid)),
     ]
     for i, (nama, data) in enumerate(file_tests, 9):
         in_path = os.path.join(OUTPUT_DIR, nama)
@@ -162,49 +178,69 @@ def uji_waktu_proses():
 # =========================================================
 # 3. AVALANCHE EFFECT
 # =========================================================
-def hitung_avalanche(bytes1: bytes, bytes2: bytes) -> float:
-    """Menghitung persentase bit yang berbeda antara dua rangkaian byte."""
+def _bit_beda(bytes1: bytes, bytes2: bytes):
+    """Return (jumlah bit berbeda, total bit yang dibandingkan)."""
     panjang = min(len(bytes1), len(bytes2))
-    total_bit = panjang * 8
-    bit_berbeda = 0
+    beda = 0
     for i in range(panjang):
-        xor_result = bytes1[i] ^ bytes2[i]
-        bit_berbeda += bin(xor_result).count("1")
-    return (bit_berbeda / total_bit) * 100 if total_bit > 0 else 0
+        beda += bin(bytes1[i] ^ bytes2[i]).count("1")
+    return beda, panjang * 8
 
 
 def uji_avalanche_effect():
-    print("\n[3] Menghitung avalanche effect...")
+    """
+    Avalanche effect: persentase bit cipherteks yang berubah bila SATU bit
+    plainteks atau SATU karakter password (kunci) diubah.
+
+    PENTING (metodologi): salt dan nonce DIKUNCI tetap khusus di pengujian ini.
+    Aplikasi asli membuat salt dan nonce acak di setiap enkripsi, sehingga dua
+    cipherteks selalu berbeda ~50% walau inputnya identik. Kalau tidak dikunci,
+    angka yang keluar bukan efek dari perubahan 1 bit. Salt dan nonce tetap ini
+    HANYA dipakai di pengujian, tidak pernah di aplikasi.
+
+    Hasil untuk plainteks dipisah: badan cipherteks dan tag autentikasi (16 byte
+    terakhir). GCM dan ChaCha20-Poly1305 bekerja seperti stream cipher (badan
+    cipherteks = plainteks XOR keystream), sehingga 1 bit plainteks hanya mengubah
+    1 bit badan cipherteks, sedangkan tag berubah total.
+    """
+    print("\n[3] Menghitung avalanche effect (salt & nonce dikunci)...")
     password = "TestPassword123!"
-    plaintext = "Pesan uji avalanche effect untuk enkripsi modern AES dan ChaCha20" * 3
+    password_ubah = password[:-1] + "X"
+    salt = bytes(16)    # dikunci tetap, khusus pengujian
+    nonce = bytes(12)   # dikunci tetap, khusus pengujian
+
+    plaintext = ("Pesan uji avalanche effect untuk enkripsi modern AES dan ChaCha20" * 3).encode()
+    plaintext_ubah = bytearray(plaintext)
+    plaintext_ubah[-1] ^= 0x01          # ubah tepat 1 bit
+    plaintext_ubah = bytes(plaintext_ubah)
+
     hasil = []
+    for nama, cls in [("AES-256-GCM", AESGCM), ("ChaCha20-Poly1305", ChaCha20Poly1305)]:
+        kunci = derive_key(password, salt)[0]
+        kunci_ubah = derive_key(password_ubah, salt)[0]
 
-    for algo_name, enc_func in [("AES-256-GCM", encrypt_text), ("ChaCha20-Poly1305", encrypt_text_chacha)]:
-        # Kasus A: ubah 1 bit plaintext
-        plaintext_asli = plaintext
-        plaintext_ubah = plaintext[:-1] + chr(ord(plaintext[-1]) ^ 1)
+        dasar = cls(kunci).encrypt(nonce, plaintext, None)
+        ct_plain = cls(kunci).encrypt(nonce, plaintext_ubah, None)
+        ct_pass = cls(kunci_ubah).encrypt(nonce, plaintext, None)
 
-        enc1 = base64.b64decode(enc_func(plaintext_asli, password))
-        enc2 = base64.b64decode(enc_func(plaintext_ubah, password))
-        avalanche_plaintext = hitung_avalanche(enc1, enc2)
-
-        # Kasus B: ubah 1 karakter password
-        password_asli = password
-        password_ubah = password[:-1] + "X"
-
-        enc3 = base64.b64decode(enc_func(plaintext_asli, password_asli))
-        enc4 = base64.b64decode(enc_func(plaintext_asli, password_ubah))
-        avalanche_key = hitung_avalanche(enc3, enc4)
+        b_body, n_body = _bit_beda(dasar[:-16], ct_plain[:-16])
+        b_tag, n_tag = _bit_beda(dasar[-16:], ct_plain[-16:])
+        b_all, n_all = _bit_beda(dasar, ct_plain)
+        b_pw, n_pw = _bit_beda(dasar, ct_pass)
 
         hasil.append({
-            "Algoritma": algo_name,
-            "Avalanche (ubah 1 bit plaintext) %": round(avalanche_plaintext, 2),
-            "Avalanche (ubah 1 karakter password) %": round(avalanche_key, 2),
+            "Algoritma": nama,
+            "1 bit plaintext: badan cipherteks (%)": round(b_body / n_body * 100, 3),
+            "1 bit plaintext: tag autentikasi (%)": round(b_tag / n_tag * 100, 2),
+            "1 bit plaintext: keseluruhan (%)": round(b_all / n_all * 100, 2),
+            "1 karakter password: keseluruhan (%)": round(b_pw / n_pw * 100, 2),
         })
 
     df = pd.DataFrame(hasil)
     print(df.to_string(index=False))
-    print("Catatan: idealnya nilai avalanche mendekati 50% (perubahan acak/tidak terprediksi).")
+    print("Catatan: ubah password mengubah kunci sehingga seluruh keystream berubah (~50%).")
+    print("Ubah 1 bit plaintext hanya mengubah 1 bit badan cipherteks (sifat mode stream);")
+    print("integritas dijaga oleh tag autentikasi yang berubah ~50%.")
     return df
 
 
